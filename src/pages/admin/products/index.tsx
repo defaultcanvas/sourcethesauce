@@ -99,13 +99,37 @@ const Td = styled('td', {
   verticalAlign: 'middle',
 })
 
-const CategoryImage = styled('div', {
+const ProductImage = styled('div', {
   position: 'relative',
-  width: 48,
-  height: 48,
+  width: 60,
+  height: 60,
   borderRadius: 8,
   overflow: 'hidden',
   backgroundColor: '#f5f5f5',
+})
+
+const StatusBadge = styled('span', {
+  padding: '4px 10px',
+  borderRadius: 20,
+  fontSize: 12,
+  fontWeight: 600,
+  
+  variants: {
+    status: {
+      active: {
+        backgroundColor: '#e8f5e9',
+        color: '#2e7d32',
+      },
+      draft: {
+        backgroundColor: '#fff3e0',
+        color: '#ef6c00',
+      },
+      outOfStock: {
+        backgroundColor: '#ffebee',
+        color: '#c62828',
+      }
+    }
+  }
 })
 
 const ActionButton = styled('button', {
@@ -130,53 +154,89 @@ const ActionButton = styled('button', {
   }
 })
 
-interface Category {
+const PriceCell = styled('span', {
+  fontWeight: 600,
+  color: '#1a1a2e',
+})
+
+const CategoryTag = styled('span', {
+  padding: '4px 8px',
+  backgroundColor: '#f0f0f5',
+  borderRadius: 4,
+  fontSize: 12,
+  color: '#666666',
+})
+
+interface Product {
   id: string
   name: string
-  slug: string
-  image_url: string | null
-  sort_order: number
-  productCount: number
+  sku: string
+  price: number
+  images: { url: string; position?: number }[]
+  is_active: boolean
+  category: { name: string } | null
+  subcategory: { name: string } | null
+  variants: { id: string; colour: string; size: string; is_available: boolean }[]
 }
 
-interface CategoriesPageProps {
-  categories: Category[]
+interface ProductsPageProps {
+  products: Product[]
 }
 
-export default function CategoriesPage({ categories: initialCategories }: CategoriesPageProps) {
+export default function ProductsPage({ products: initialProducts }: ProductsPageProps) {
   const router = useRouter()
-  const [categories, setCategories] = useState(initialCategories)
+  const [products, setProducts] = useState(initialProducts)
   const [deleting, setDeleting] = useState<string | null>(null)
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this category? Products in this category will be unassigned.')) return
+    if (!confirm('Are you sure you want to delete this product?')) return
     
     setDeleting(id)
     try {
-      // Unassign products
-      await supabase.from('products').update({ category_id: null }).eq('category_id', id)
+      // Delete variants first
+      await supabase.from('product_variants').delete().eq('product_id', id)
       
-      // Delete subcategories
-      await supabase.from('subcategories').delete().eq('category_id', id)
+      // Delete images
+      await supabase.from('product_images').delete().eq('product_id', id)
       
-      // Delete category
-      const { error } = await supabase.from('categories').delete().eq('id', id)
+      // Delete product
+      const { error } = await supabase.from('products').delete().eq('id', id)
       
       if (error) throw error
       
-      setCategories(prev => prev.filter(c => c.id !== id))
+      setProducts(prev => prev.filter(p => p.id !== id))
     } catch (error) {
-      console.error('Error deleting category:', error)
-      alert('Failed to delete category')
+      console.error('Error deleting product:', error)
+      alert('Failed to delete product')
     } finally {
       setDeleting(null)
     }
   }
 
+  const getProductStatus = (product: Product) => {
+    const availableVariants = product.variants?.filter(v => v.is_available)?.length || 0
+    if (availableVariants === 0 && product.variants?.length > 0) return 'outOfStock'
+    if (!product.is_active) return 'draft'
+    return 'active'
+  }
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'active': return 'Active'
+      case 'draft': return 'Draft'
+      case 'outOfStock': return 'Out of Stock'
+      default: return status
+    }
+  }
+
+  const getVariantCount = (product: Product) => {
+    return product.variants?.length || 0
+  }
+
   return (
     <>
       <Head>
-        <title>Categories | Admin Dashboard</title>
+        <title>Products | Admin Dashboard</title>
       </Head>
       
       <Container>
@@ -184,7 +244,7 @@ export default function CategoriesPage({ categories: initialCategories }: Catego
           <Logo>Admin Dashboard</Logo>
           <Nav>
             <NavLink href="/admin">Dashboard</NavLink>
-            <NavLink href="/admin/products">Products</NavLink>
+            <NavLink href="/admin/products" style={{ opacity: 1 }}>Products</NavLink>
             <NavLink href="/admin/categories">Categories</NavLink>
             <NavLink href="/admin/subcategories">Subcategories</NavLink>
             <NavLink href="/admin/orders">Orders</NavLink>
@@ -193,13 +253,13 @@ export default function CategoriesPage({ categories: initialCategories }: Catego
 
         <Main>
           <PageHeader>
-            <Title>Categories</Title>
-            <AddButton href="/admin/categories/new">
+            <Title>Products</Title>
+            <AddButton href="/admin/products/new">
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="12" y1="5" x2="12" y2="19"/>
                 <line x1="5" y1="12" x2="19" y2="12"/>
               </svg>
-              Add Category
+              Add Product
             </AddButton>
           </PageHeader>
 
@@ -209,52 +269,68 @@ export default function CategoriesPage({ categories: initialCategories }: Catego
                 <tr>
                   <Th>Image</Th>
                   <Th>Name</Th>
-                  <Th>Slug</Th>
-                  <Th>Products</Th>
-                  <Th>Order</Th>
+                  <Th>SKU</Th>
+                  <Th>Price</Th>
+                  <Th>Category</Th>
+                  <Th>Variants</Th>
+                  <Th>Status</Th>
                   <Th>Actions</Th>
                 </tr>
               </thead>
               <tbody>
-                {categories.map((category) => (
-                  <tr key={category.id}>
-                    <Td>
-                      <CategoryImage>
-                        {category.image_url && (
-                          <Image
-                            src={category.image_url}
-                            alt={category.name}
-                            fill
-                            style={{ objectFit: 'cover' }}
-                          />
+                {products.map((product) => {
+                  const status = getProductStatus(product)
+                  return (
+                    <tr key={product.id}>
+                      <Td>
+                        <ProductImage>
+                          {product.images?.[0]?.url && (
+                            <Image
+                              src={product.images[0].url}
+                              alt={product.name}
+                              fill
+                              style={{ objectFit: 'cover' }}
+                            />
+                          )}
+                        </ProductImage>
+                      </Td>
+                      <Td style={{ fontWeight: 500 }}>{product.name}</Td>
+                      <Td style={{ color: '#666666', fontFamily: 'monospace' }}>{product.sku}</Td>
+                      <Td><PriceCell>£{product.price?.toFixed(2)}</PriceCell></Td>
+                      <Td>
+                        {product.category && (
+                          <CategoryTag>{product.category.name}</CategoryTag>
                         )}
-                      </CategoryImage>
-                    </Td>
-                    <Td style={{ fontWeight: 500 }}>{category.name}</Td>
-                    <Td style={{ color: '#666666' }}>{category.slug}</Td>
-                    <Td>{category.productCount}</Td>
-                    <Td>{category.sort_order}</Td>
-                    <Td>
-                      <ActionButton
-                        variant="edit"
-                        onClick={() => router.push(`/admin/categories/${category.id}`)}
-                      >
-                        Edit
-                      </ActionButton>
-                      <ActionButton
-                        variant="delete"
-                        onClick={() => handleDelete(category.id)}
-                        disabled={deleting === category.id}
-                      >
-                        {deleting === category.id ? '...' : 'Delete'}
-                      </ActionButton>
-                    </Td>
-                  </tr>
-                ))}
-                {categories.length === 0 && (
+                        {product.subcategory && (
+                          <CategoryTag style={{ marginLeft: 4 }}>{product.subcategory.name}</CategoryTag>
+                        )}
+                      </Td>
+                      <Td>{getVariantCount(product)} variants</Td>
+                      <Td>
+                        <StatusBadge status={status}>{getStatusLabel(status)}</StatusBadge>
+                      </Td>
+                      <Td>
+                        <ActionButton
+                          variant="edit"
+                          onClick={() => router.push(`/admin/products/${product.id}`)}
+                        >
+                          Edit
+                        </ActionButton>
+                        <ActionButton
+                          variant="delete"
+                          onClick={() => handleDelete(product.id)}
+                          disabled={deleting === product.id}
+                        >
+                          {deleting === product.id ? '...' : 'Delete'}
+                        </ActionButton>
+                      </Td>
+                    </tr>
+                  )
+                })}
+                {products.length === 0 && (
                   <tr>
-                    <Td colSpan={6} style={{ textAlign: 'center', color: '#666666', padding: 48 }}>
-                      No categories yet. <Link href="/admin/categories/new" style={{ color: '#1976d2' }}>Add your first category</Link>
+                    <Td colSpan={8} style={{ textAlign: 'center', color: '#666666', padding: 48 }}>
+                      No products yet. <Link href="/admin/products/new" style={{ color: '#1976d2' }}>Add your first product</Link>
                     </Td>
                   </tr>
                 )}
@@ -267,30 +343,25 @@ export default function CategoriesPage({ categories: initialCategories }: Catego
   )
 }
 
-export const getServerSideProps: GetServerSideProps<CategoriesPageProps> = async () => {
-  const { data: categories } = await supabase
-    .from('categories')
-    .select('*')
-    .order('sort_order')
+export const getServerSideProps: GetServerSideProps<ProductsPageProps> = async () => {
+  const { data: products, error } = await supabase
+    .from('products')
+    .select(`
+      *,
+      category:categories(name),
+      subcategory:subcategories(name),
+      images:product_images(url, position),
+      variants:product_variants(id, colour, size, is_available)
+    `)
+    .order('created_at', { ascending: false })
 
-  // Get product counts
-  const categoriesWithCounts = await Promise.all(
-    (categories || []).map(async (cat: any) => {
-      const { count } = await supabase
-        .from('products')
-        .select('id', { count: 'exact' })
-        .eq('category_id', cat.id)
-      
-      return {
-        ...cat,
-        productCount: count || 0,
-      }
-    })
-  )
+  if (error) {
+    console.error('Error fetching products:', error)
+  }
 
   return {
     props: {
-      categories: categoriesWithCounts,
+      products: products || [],
     }
   }
 }

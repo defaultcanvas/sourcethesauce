@@ -12,7 +12,7 @@ import { useCart } from '@/context/telegram-cart'
 
 const Container = styled('div', {
   minHeight: '100vh',
-  paddingBottom: 76, // extra space for bottom bar
+  paddingBottom: 140, // extra space for bottom bar + mini-cart
   background:
     'radial-gradient(circle at top, rgba(99,102,241,0.12) 0, transparent 55%), radial-gradient(circle at bottom, rgba(15,23,42,0.9) 0, #020617 70%)',
 })
@@ -337,13 +337,13 @@ const BottomBar = styled('div', {
   position: 'fixed',
   left: 0,
   right: 0,
-  bottom: 0,
-  padding: '8px 10px 10px',
-  zIndex: 120,
+  bottom: 'calc(72px + env(safe-area-inset-bottom))',
+  padding: '10px 12px',
+  zIndex: 500,
   background:
-    'linear-gradient(to top, rgba(15,23,42,0.97), rgba(15,23,42,0.9))',
-  borderTop: '1px solid rgba(148,163,184,0.4)',
-  backdropFilter: 'blur(10px)',
+    'linear-gradient(to top, rgba(15,23,42,0.98), rgba(15,23,42,0.95))',
+  borderTop: '1px solid rgba(148,163,184,0.3)',
+  backdropFilter: 'blur(12px)',
 })
 
 const BottomBarInner = styled('div', {
@@ -713,35 +713,6 @@ export default function TelegramHome({
               <p>No products available yet.</p>
               <p>Check back soon!</p>
             </EmptyState>
-          )}
-
-          {/* Bottom mini-cart */}
-          {totalItems > 0 && (
-            <BottomBar>
-              <BottomBarInner>
-                <BottomBarText>
-                  <BottomBarLine>
-                    {totalItems} item{totalItems > 1 ? 's' : ''} in your bag
-                  </BottomBarLine>
-                  <BottomBarLine>Ready when you are.</BottomBarLine>
-                </BottomBarText>
-                <BottomBarButton href="/tg/cart">
-                  View cart
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.4"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M9 18l6-6-6-6" />
-                  </svg>
-                </BottomBarButton>
-              </BottomBarInner>
-            </BottomBar>
           )}
         </Container>
       </TelegramLayout>
