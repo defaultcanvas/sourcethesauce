@@ -1,16 +1,19 @@
 import {
-  AiOutlineClose, AiOutlineMail, AiOutlineQuestionCircle, AiTwotoneHeart
-} from '@meronex/icons/ai';
+  AiOutlineClose,
+  AiOutlineMail,
+  AiOutlineQuestionCircle,
+  AiTwotoneHeart,
+} from '@meronex/icons/ai'
 import {
   BsBag,
   BsFillHeartFill,
-  BsSearch
-} from '@meronex/icons/bs';
-import { CgMenuLeft, CgMenuRight } from '@meronex/icons/cg';
+  BsSearch,
+} from '@meronex/icons/bs'
+import { CgMenuLeft, CgMenuRight } from '@meronex/icons/cg'
 import {
   IosArrowDown,
-  IosArrowUp
-} from '@meronex/icons/ios';
+  IosArrowUp,
+} from '@meronex/icons/ios'
 
 export const icons = {
   menuRight: CgMenuRight,
@@ -23,5 +26,7 @@ export const icons = {
   arrowDown: IosArrowDown,
   close: AiOutlineClose,
   question: AiOutlineQuestionCircle,
-  email: AiOutlineMail
-}
+  email: AiOutlineMail,
+} as const
+
+export type IconName = keyof typeof icons

@@ -1,10 +1,9 @@
-import { IconProps } from "@/components/common/icon/types";
 import { ButtonHTMLAttributes } from 'react'
+import { IconProps } from '@/components/common/icon/types'
 
-type RootButtonProps = Pick<ButtonHTMLAttributes<HTMLButtonElement>,
-  'onClick'
-   | 'type'
->
+// Allow all normal <button> attributes except `children`
+// so we can safely forward things like `style`, `aria-*`, etc.
+type RootButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'>
 
 export interface ButtonIconProps extends RootButtonProps {
   icon: IconProps
