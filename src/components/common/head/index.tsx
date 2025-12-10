@@ -1,53 +1,108 @@
 import NextHead from 'next/head'
-import { HeadProps } from './types'
-
 import qs from 'querystring'
+import type { HeadProps } from './types'
 
-export function Head (props: HeadProps) {
+const DEFAULT_OG_IMAGE = 'https://mycv-online.vercel.app/og-image.png'
+const DEFAULT_TITLE = 'Source The Sauce'
+
+export function Head(props: HeadProps) {
   const {
-    description,
     title,
-    image = 'https://mycv-online.vercel.app/og-image.png',
+    description,
+    image = DEFAULT_OG_IMAGE,
+    url,
+    noIndex,
     og,
     twitter,
     ogCustom,
   } = props
 
-  const twitterMeta = {
-    description: twitter?.description || description,
-    image: twitter?.image || image,
-    title: twitter?.title || title
-  }
-
+  // Merge OG / Twitter meta
   const ogMeta = {
-    description: og?.description || description,
-    title: og?.title || title,
-    image: og?.image || image
+    title: og?.title || title || DEFAULT_TITLE,
+    description: og?.description || description || '',
+    image: og?.image || image,
   }
 
+  const twitterMeta = {
+    title: twitter?.title || ogMeta.title,
+    description: twitter?.description || description || '',
+    image: twitter?.image || image,
+  }
+
+  // Optional OG customizer query string
   const query = ogCustom ? qs.stringify(ogCustom) : ''
+
+  const ogImage =
+    ogMeta.image
+      ? ogCustom && query
+        ? `${ogMeta.image}${ogMeta.image.includes('?') ? '&' : '?'}${query}`
+        : ogMeta.image
+      : undefined
+
+  const finalTitle = ogMeta.title || twitterMeta.title || DEFAULT_TITLE
 
   return (
     <NextHead>
-      <title>{title}</title>
-      {description && <meta name="description" content={description}/>}
-      <meta property="twitter:card" content="summary_large_image" />
-      <meta name="language-lp" content="pt-BR" />
-      <meta property="og:locale" content="pt-BR" />
+      {/* Basic */}
+      <title>{finalTitle}</title>
+      {description && <meta name="description" content={description} />}
+
+      {/* Robots / indexing control */}
+      {noIndex && (
+        <meta name="robots" content="noindex,nofollow" />
+      )}
+
+      {/* Canonical URL */}
+      {url && <link rel="canonical" href={url} />}
+
+      {/* Locale / language */}
+      <meta name="language" content="en-GB" />
+      <meta property="og:locale" content="en_GB" />
+
+      {/* Open Graph */}
       <meta property="og:type" content="website" />
+      {url && <meta property="og:url" content={url} />}
       {ogMeta.title && <meta property="og:title" content={ogMeta.title} />}
-      {ogMeta.description && <meta property="og:description" content={ogMeta.description} />}
-      {ogMeta.image && !ogCustom && <meta property="og:image" content={ogMeta.image} />}
-      <meta name="twitter:card" content="summary" />
-      {twitterMeta.title && <meta property="twitter:title" content={twitterMeta.title} />}
-      {twitterMeta.image && <meta property="twitter:image" content={twitterMeta.image} />}
-      {twitterMeta.description && <meta property="twitter:description" content={twitterMeta.description} />}
-      <meta name="msapplication-TileColor" content="#da532c" />
-      <meta name="theme-color" content="#ffffff" />
-      <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+      {ogMeta.description && (
+        <meta property="og:description" content={ogMeta.description} />
+      )}
+      {ogImage && <meta property="og:image" content={ogImage} />}
+
+      {/* Twitter */}
+      <meta name="twitter:card" content="summary_large_image" />
+      {twitterMeta.title && (
+        <meta name="twitter:title" content={twitterMeta.title} />
+      )}
+      {twitterMeta.description && (
+        <meta name="twitter:description" content={twitterMeta.description} />
+      )}
+      {twitterMeta.image && (
+        <meta name="twitter:image" content={twitterMeta.image} />
+      )}
+
+      {/* Theming / icons */}
+      <meta name="msapplication-TileColor" content="#000000" />
+      <meta name="theme-color" content="#000000" />
+
+      <link
+        rel="apple-touch-icon"
+        sizes="180x180"
+        href="/apple-touch-icon.png"
+      />
       <link rel="icon" type="image/png" href="/favicon.ico" />
-      <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
-      <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+      <link
+        rel="icon"
+        type="image/png"
+        sizes="32x32"
+        href="/favicon-32x32.png"
+      />
+      <link
+        rel="icon"
+        type="image/png"
+        sizes="16x16"
+        href="/favicon-16x16.png"
+      />
     </NextHead>
   )
 }

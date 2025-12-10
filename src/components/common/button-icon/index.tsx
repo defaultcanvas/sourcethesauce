@@ -1,40 +1,48 @@
 import { forwardRef } from 'react'
 import { Icon } from '../icon'
 import * as Styles from './styles'
-import { ButtonIconProps } from './types'
+import type { ButtonIconProps } from './types'
 
-export const ButtonIcon = forwardRef<HTMLButtonElement, ButtonIconProps>((props, ref) => {
-  const {
-    icon,
-    label,
-    textHelper,
-    ...otherProps
-  } = props
+export const ButtonIcon = forwardRef<HTMLButtonElement, ButtonIconProps>(
+  (props, ref) => {
+    const { icon, label, textHelper, ...restProps } = props
 
-  return (
-    <Styles.Provider>
-      <Styles.Root>
-        <Styles.Trigger ref={ref} asChild>
-          <Styles.Button 
-            aria-label={label} 
-            {...otherProps}
-            style={{
-              width: (icon?.size || 25) + 5,
-              height: (icon?.size || 25) + 5,
-            }}
-          >
-            <Icon {...icon}  />
-          </Styles.Button>
-        </Styles.Trigger>
-        {textHelper && (
-          <Styles.Portal>
-            <Styles.Content sideOffset={5}>
-              {textHelper}
-              <Styles.Arrow />
-            </Styles.Content>
-          </Styles.Portal>
-        )}
-      </Styles.Root>
-    </Styles.Provider>
-  )
-}) 
+    // Extract any incoming style from the rest of props (not typed on ButtonIconProps)
+    const { style, ...buttonProps } = restProps as any
+
+    const baseSize = icon?.size ?? 25
+    const sizeWithPadding = baseSize + 5
+
+    return (
+      <Styles.Provider>
+        <Styles.Root>
+          <Styles.Trigger asChild>
+            <Styles.Button
+              ref={ref}
+              aria-label={label}
+              {...buttonProps}
+              style={{
+                width: sizeWithPadding,
+                height: sizeWithPadding,
+                ...(style || {}),
+              }}
+            >
+              <Icon {...icon} />
+            </Styles.Button>
+          </Styles.Trigger>
+
+          {textHelper && (
+            <Styles.Portal>
+              <Styles.Content sideOffset={5}>
+                {textHelper}
+                <Styles.Arrow />
+              </Styles.Content>
+            </Styles.Portal>
+          )}
+        </Styles.Root>
+      </Styles.Provider>
+    )
+  }
+)
+
+ButtonIcon.displayName = 'ButtonIcon'

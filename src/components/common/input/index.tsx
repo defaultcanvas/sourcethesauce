@@ -1,10 +1,11 @@
-import { Box, ButtonIcon, Icon, TextHelper } from "@/components/common";
-import { IconProps } from "@/components/common/icon/types";
-import Image from "next/image";
-import { ChangeEvent, forwardRef, KeyboardEvent } from "react";
+import { forwardRef } from 'react'
+import Image from 'next/image'
 
-import * as Styles from "./styles";
-import { InputProps } from "./types";
+import { Box, ButtonIcon, Icon, TextHelper } from '@/components/common'
+import type { IconProps } from '@/components/common/icon/types'
+
+import * as Styles from './styles'
+import type { InputProps } from './types'
 
 export const Input = forwardRef<HTMLInputElement, InputProps>((props, ref) => {
   const {
@@ -15,37 +16,38 @@ export const Input = forwardRef<HTMLInputElement, InputProps>((props, ref) => {
     rightIcon,
     onLeftIconClick,
     onRightIconClick,
-    defaultValue,
     textHelper,
     onMask,
-    format = 'string',
+    format: _format = 'string', // reserved for future formatting, avoids unused var warnings
     disabled,
     loading,
     ...otherProps
-  } = props;
-  const hasError = !!errorMessage;
+  } = props
+
+  const hasError = Boolean(errorMessage)
 
   const renderLabel = () => {
-    if (!label) return null;
+    if (!label) return null
+
     return (
       <Box gap={0.5}>
-        <Styles.Label
-          htmlFor={otherProps?.id || ""}
-        >
+        <Styles.Label htmlFor={otherProps.id ?? ''}>
           {label}
         </Styles.Label>
         {textHelper && <TextHelper content={textHelper} />}
       </Box>
-    );
-  };
+    )
+  }
 
   const renderErrorMessage = () => {
-    if (!hasError) return null;
+    if (!hasError) return null
 
     return (
-      <Styles.ErrorMessage color="error">{errorMessage}</Styles.ErrorMessage>
-    );
-  };
+      <Styles.ErrorMessage color="error">
+        {errorMessage}
+      </Styles.ErrorMessage>
+    )
+  }
 
   const renderIcon = (icon?: IconProps, callback?: () => void) => {
     if (!icon) return null
@@ -54,57 +56,68 @@ export const Input = forwardRef<HTMLInputElement, InputProps>((props, ref) => {
       return (
         <ButtonIcon
           type="button"
-          label="icon"
+          label={icon.name}
           onClick={callback}
           icon={icon}
         />
-      );
+      )
     }
 
-    return (
-      <Icon {...icon} />
-    );
-  };
+    return <Icon {...icon} />
+  }
 
   const renderLeftIcon = () => {
-    if (!leftIcon) return null;
+    if (!leftIcon) return null
 
     return (
       <Styles.LeftIconView>
         {renderIcon(leftIcon, onLeftIconClick)}
       </Styles.LeftIconView>
-    );
-  };
+    )
+  }
 
   const renderRightIcon = () => {
-    if (!rightIcon && !loading) return null;
+    if (!rightIcon && !loading) return null
 
     return (
       <Styles.RightIconView>
         {loading ? (
-          <Image src="elipse-load.svg" alt="loading" width={30} height={30} />
-        ) : renderIcon(rightIcon, onRightIconClick)}
+          <Image
+            src="/elipse-load.svg"
+            alt="Loading"
+            width={30}
+            height={30}
+          />
+        ) : (
+          renderIcon(rightIcon, onRightIconClick)
+        )}
       </Styles.RightIconView>
-    );
-  };
+    )
+  }
 
   return (
     <Styles.Container fullWidth={fullWidth}>
       {renderLabel()}
+
       <Styles.IconView>
         {renderLeftIcon()}
+
         <Styles.Input
           {...otherProps}
           ref={ref}
           disabled={disabled || loading}
           hasError={hasError}
-          hasLeftIcon={!!leftIcon}
-          hasRightIcon={!!rightIcon}
+          hasLeftIcon={Boolean(leftIcon)}
+          hasRightIcon={Boolean(rightIcon || loading)}
           onKeyUp={onMask}
         />
+
         {renderRightIcon()}
       </Styles.IconView>
+
       {renderErrorMessage()}
     </Styles.Container>
-  );
-});
+  )
+})
+
+Input.displayName = 'Input'
