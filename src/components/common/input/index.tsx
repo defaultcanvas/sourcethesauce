@@ -18,20 +18,22 @@ export const Input = forwardRef<HTMLInputElement, InputProps>((props, ref) => {
     onRightIconClick,
     textHelper,
     onMask,
-    format: _format = 'string', // reserved for future formatting, avoids unused var warnings
+    format: _format = 'string', // reserved for future formatting
     disabled,
     loading,
     ...otherProps
   } = props
 
   const hasError = Boolean(errorMessage)
+  const inputId = otherProps.id ?? ''
+  const errorId = hasError && inputId ? `${inputId}-error` : undefined
 
   const renderLabel = () => {
     if (!label) return null
 
     return (
       <Box gap={0.5}>
-        <Styles.Label htmlFor={otherProps.id ?? ''}>
+        <Styles.Label htmlFor={inputId}>
           {label}
         </Styles.Label>
         {textHelper && <TextHelper content={textHelper} />}
@@ -43,7 +45,7 @@ export const Input = forwardRef<HTMLInputElement, InputProps>((props, ref) => {
     if (!hasError) return null
 
     return (
-      <Styles.ErrorMessage color="error">
+      <Styles.ErrorMessage id={errorId}>
         {errorMessage}
       </Styles.ErrorMessage>
     )
@@ -104,12 +106,15 @@ export const Input = forwardRef<HTMLInputElement, InputProps>((props, ref) => {
 
         <Styles.Input
           {...otherProps}
+          id={inputId}
           ref={ref}
           disabled={disabled || loading}
           hasError={hasError}
           hasLeftIcon={Boolean(leftIcon)}
           hasRightIcon={Boolean(rightIcon || loading)}
           onKeyUp={onMask}
+          aria-invalid={hasError || undefined}
+          aria-describedby={errorId}
         />
 
         {renderRightIcon()}

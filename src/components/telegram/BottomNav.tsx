@@ -2,8 +2,9 @@ import Link from 'next/link'
 import { useRouter } from 'next/router'
 import { styled } from 'stitches.config'
 import { useCart } from '@/context/telegram-cart'
+import { useWishlist } from '@/context/telegram-wishlist'
+import { lightImpact } from '@/lib/telegram/haptics'
 
-// Outer shell pinned to bottom
 const NavShell = styled('div', {
   position: 'fixed',
   bottom: 0,
@@ -14,10 +15,9 @@ const NavShell = styled('div', {
   display: 'flex',
   justifyContent: 'center',
   zIndex: 1000,
-  pointerEvents: 'none', // only inner dock is clickable
+  pointerEvents: 'none',
 })
 
-// Floating dock
 const Dock = styled('nav', {
   pointerEvents: 'auto',
   maxWidth: 460,
@@ -33,7 +33,6 @@ const Dock = styled('nav', {
     '0 18px 45px rgba(15,23,42,0.75), 0 0 0 1px rgba(148,163,184,0.35)',
 })
 
-// Single tab
 const NavItem = styled(Link, {
   position: 'relative',
   flex: 1,
@@ -85,7 +84,6 @@ const Label = styled('span', {
   whiteSpace: 'nowrap',
 })
 
-// Cart badge
 const Badge = styled('span', {
   position: 'absolute',
   top: -4,
@@ -104,7 +102,6 @@ const Badge = styled('span', {
   boxShadow: '0 2px 8px rgba(239,68,68,0.55)',
 })
 
-// Cart total pill above cart tab
 const CartTotalPill = styled('div', {
   position: 'absolute',
   top: -20,
@@ -119,7 +116,6 @@ const CartTotalPill = styled('div', {
   whiteSpace: 'nowrap',
 })
 
-// Icons
 const HomeIcon = ({ active }: { active?: boolean }) => (
   <svg
     viewBox="0 0 24 24"
@@ -202,21 +198,32 @@ const ProfileIcon = ({ active }: { active?: boolean }) => (
 )
 
 interface BottomNavProps {
-  cartCount?: number // kept for compatibility; we rely on context for real values
+  cartCount?: number
   wishlistCount?: number
 }
 
-export function BottomNav({ cartCount }: BottomNavProps) {
+export function BottomNav({ cartCount, wishlistCount }: BottomNavProps) {
   const router = useRouter()
   const pathname = router.pathname
 
-  // Auto-hide on checkout / order flow
-  const hideNav =
-    pathname.startsWith('/tg/checkout') || pathname.startsWith('/tg/order')
+  const hideNavRoutes = [
+    '/tg/checkout',
+    '/tg/order',
+    '/tg/login',
+    '/tg/address',
+    '/tg/settings',
+  ]
+
+  const hideNav = hideNavRoutes.some((r) => pathname.startsWith(r))
 
   const { totalItems, totalPrice } = useCart()
-  const effectiveCartCount = totalItems // ignore prop; always trust live cart
+  const { items: wishlistItems } = useWishlist()
+
+  const effectiveCartCount = totalItems
   const cartTotal = totalPrice
+
+  const effectiveWishlistCount =
+    wishlistItems?.length ?? wishlistCount ?? 0
 
   if (hideNav) return null
 
@@ -226,30 +233,71 @@ export function BottomNav({ cartCount }: BottomNavProps) {
   }
 
   const homeActive = isActive('/tg')
-  const categoriesActive = isActive('/tg/categories') || isActive('/tg/category')
+  const categoriesActive =
+    isActive('/tg/categories') || isActive('/tg/category')
   const wishlistActive = isActive('/tg/wishlist')
   const cartActive = isActive('/tg/cart')
   const profileActive = isActive('/tg/profile')
 
+  const handleNavClick = () => {
+    try {
+      lightImpact()
+    } catch {
+      // ignore if haptics not available
+    }
+  }
+
   return (
     <NavShell>
-      <Dock>
-        <NavItem href="/tg" active={homeActive}>
+      <Dock aria-label="Main navigation">
+        <NavItem
+          href="/tg"
+          active={homeActive}
+          aria-label="Home"
+          aria-current={homeActive ? 'page' : undefined}
+          onClick={handleNavClick}
+        >
           <HomeIcon active={homeActive} />
           <Label>Home</Label>
         </NavItem>
 
-        <NavItem href="/tg/categories" active={categoriesActive}>
+        <NavItem
+          href="/tg/categories"
+          active={categoriesActive}
+          aria-label="Browse categories"
+          aria-current={categoriesActive ? 'page' : undefined}
+          onClick={handleNavClick}
+        >
           <CategoryIcon active={categoriesActive} />
           <Label>Categories</Label>
         </NavItem>
 
-        <NavItem href="/tg/wishlist" active={wishlistActive}>
-          <WishlistIcon active={wishlistActive} />
+        <NavItem
+          href="/tg/wishlist"
+          active={wishlistActive}
+          aria-label="Wishlist"
+          aria-current={wishlistActive ? 'page' : undefined}
+          onClick={handleNavClick}
+        >
+          <div style={{ position: 'relative' }}>
+            <WishlistIcon active={wishlistActive} />
+            {effectiveWishlistCount > 0 && (
+              <Badge>
+                {effectiveWishlistCount > 9 ? '9+' : effectiveWishlistCount}
+              </Badge>
+            )}
+          </div>
           <Label>Wishlist</Label>
         </NavItem>
 
-        <NavItem href="/tg/cart" active={cartActive} center>
+        <NavItem
+          href="/tg/cart"
+          active={cartActive}
+          center
+          aria-label="Cart"
+          aria-current={cartActive ? 'page' : undefined}
+          onClick={handleNavClick}
+        >
           {cartTotal > 0 && (
             <CartTotalPill>£{cartTotal.toFixed(2)}</CartTotalPill>
           )}
@@ -257,7 +305,13 @@ export function BottomNav({ cartCount }: BottomNavProps) {
           <Label>Cart</Label>
         </NavItem>
 
-        <NavItem href="/tg/profile" active={profileActive}>
+        <NavItem
+          href="/tg/profile"
+          active={profileActive}
+          aria-label="Profile"
+          aria-current={profileActive ? 'page' : undefined}
+          onClick={handleNavClick}
+        >
           <ProfileIcon active={profileActive} />
           <Label>Profile</Label>
         </NavItem>

@@ -42,6 +42,30 @@ export const Button = styled('button', {
           backgroundColor: '$primaryDark',
         },
       },
+      letters: {
+        backgroundColor: 'transparent',
+        color: '$primary',
+        border: 'none',
+        boxShadow: 'none',
+        textTransform: 'uppercase',
+        letterSpacing: '0.18em',
+
+        '&:hover:enabled': {
+          backgroundColor: 'rgba(148,163,184,0.04)',
+        },
+      },
+      letter: {
+        backgroundColor: 'transparent',
+        color: '$primary',
+        border: 'none',
+        boxShadow: 'none',
+        textTransform: 'uppercase',
+        letterSpacing: '0.18em',
+
+        '&:hover:enabled': {
+          backgroundColor: 'rgba(148,163,184,0.04)',
+        },
+      },
       secondary: {
         backgroundColor: '$white',
         color: '$primary',

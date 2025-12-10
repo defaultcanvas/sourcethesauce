@@ -30,6 +30,7 @@ export const IconView = styled('div', {
 })
 
 export const Input = styled('input', {
+  boxSizing: 'border-box',
   width: '100%',
   height: '3rem',
   borderRadius: '10px',
@@ -40,7 +41,8 @@ export const Input = styled('input', {
   fontWeight: 400,
   fontSize: '0.95rem',
   backgroundColor: 'transparent',
-  transition: 'border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease',
+  transition:
+    'border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease, color 0.18s ease',
 
   '&::placeholder': {
     color: '$text',
@@ -51,13 +53,14 @@ export const Input = styled('input', {
 
   '&:focus': {
     borderColor: '$primary',
-    boxShadow: '0 0 0 2px rgba(99, 102, 241, 0.25)', // soft focus ring
+    boxShadow: '0 0 0 2px rgba(99, 102, 241, 0.25)',
     backgroundColor: 'rgba(0,0,0,0.01)',
   },
 
   '&:disabled': {
     opacity: 0.6,
     cursor: 'not-allowed',
+    backgroundColor: 'rgba(0,0,0,0.02)',
   },
 
   variants: {
@@ -76,6 +79,10 @@ export const Input = styled('input', {
         borderColor: '$error',
         color: '$error',
         boxShadow: '0 0 0 1px rgba(239, 68, 68, 0.35)',
+        '&::placeholder': {
+          color: '$error',
+          opacity: 0.8,
+        },
       },
     },
   },

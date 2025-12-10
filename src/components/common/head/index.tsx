@@ -17,28 +17,27 @@ export function Head(props: HeadProps) {
     ogCustom,
   } = props
 
-  // Merge OG / Twitter meta
+  // Merge OG meta
   const ogMeta = {
     title: og?.title || title || DEFAULT_TITLE,
     description: og?.description || description || '',
     image: og?.image || image,
   }
 
+  // Merge Twitter meta
   const twitterMeta = {
     title: twitter?.title || ogMeta.title,
     description: twitter?.description || description || '',
     image: twitter?.image || image,
   }
 
-  // Optional OG customizer query string
+  // Optional OG customizer query string for dynamic OG image services
   const query = ogCustom ? qs.stringify(ogCustom) : ''
 
   const ogImage =
-    ogMeta.image
-      ? ogCustom && query
-        ? `${ogMeta.image}${ogMeta.image.includes('?') ? '&' : '?'}${query}`
-        : ogMeta.image
-      : undefined
+    ogMeta.image && ogCustom && query
+      ? `${ogMeta.image}${ogMeta.image.includes('?') ? '&' : '?'}${query}`
+      : ogMeta.image || undefined
 
   const finalTitle = ogMeta.title || twitterMeta.title || DEFAULT_TITLE
 
@@ -49,9 +48,7 @@ export function Head(props: HeadProps) {
       {description && <meta name="description" content={description} />}
 
       {/* Robots / indexing control */}
-      {noIndex && (
-        <meta name="robots" content="noindex,nofollow" />
-      )}
+      {noIndex && <meta name="robots" content="noindex,nofollow" />}
 
       {/* Canonical URL */}
       {url && <link rel="canonical" href={url} />}
@@ -90,7 +87,8 @@ export function Head(props: HeadProps) {
         sizes="180x180"
         href="/apple-touch-icon.png"
       />
-      <link rel="icon" type="image/png" href="/favicon.ico" />
+      {/* keep .ico as generic icon */}
+      <link rel="icon" href="/favicon.ico" />
       <link
         rel="icon"
         type="image/png"
@@ -106,3 +104,5 @@ export function Head(props: HeadProps) {
     </NextHead>
   )
 }
+
+export default Head

@@ -1,24 +1,33 @@
-import { PropsWithChildren } from 'react'
 import { Icon } from '../icon'
 import * as Styles from './styles'
-import { TextHelperProps } from './types'
+import type { TextHelperProps } from './types'
 
-export function TextHelper (props: TextHelperProps) {
-  const {
-    content
-  } = props
+export function TextHelper({ content }: TextHelperProps) {
+  // If there is no helper text, render nothing
+  if (!content) return null
 
   return (
-    <Styles.Provider>
+    <Styles.Provider delayDuration={150}>
       <Styles.Root>
-        <Styles.Trigger type="button">
-          <Icon name="question" size={15} />
+        <Styles.Trigger asChild>
+          <button
+            type="button"
+            aria-label="More information"
+            style={{
+              all: 'unset',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'help',
+            }}
+          >
+            <Icon name="question" size={15} />
+          </button>
         </Styles.Trigger>
+
         <Styles.Portal>
           <Styles.Content sideOffset={5}>
-            <p>
-              {content}
-            </p>
+            <p>{content}</p>
             <Styles.Arrow />
           </Styles.Content>
         </Styles.Portal>
@@ -26,3 +35,5 @@ export function TextHelper (props: TextHelperProps) {
     </Styles.Provider>
   )
 }
+
+export default TextHelper

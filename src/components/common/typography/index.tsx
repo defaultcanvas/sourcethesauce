@@ -1,8 +1,8 @@
+import { PropsWithChildren } from 'react'
 import * as Styles from './styles'
-
 import type { TypographyProps } from './types'
 
-export function Typography (props: TypographyProps) {
+export function Typography(props: PropsWithChildren<TypographyProps>) {
   const { children, ...otherProps } = props
 
   return (
@@ -11,3 +11,7 @@ export function Typography (props: TypographyProps) {
     </Styles.Typography>
   )
 }
+
+Typography.displayName = 'Typography'
+
+export default Typography

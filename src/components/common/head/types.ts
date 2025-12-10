@@ -1,35 +1,43 @@
-export interface HeadProps {
-  // Page-level basics
+export interface BaseMeta {
   title?: string
   description?: string
   image?: string
+}
 
-  // Optional: canonical URL for OG / Twitter / SEO
+export interface OgCustomParams {
+  // Loose key/value so qs.stringify works with future keys
+  [key: string]: string | number | boolean | undefined
+  name?: string
+  jobTitle?: string
+  city?: string
+  country?: string
+  avatar?: string
+}
+
+export interface HeadProps extends BaseMeta {
+  /**
+   * Canonical URL for the page
+   */
   url?: string
 
-  // Optional: flag to tell search engines not to index this page
+  /**
+   * If true, add noindex/nofollow meta
+   */
   noIndex?: boolean
 
-  // Optional overrides for Open Graph
-  og?: {
-    description?: string
-    title?: string
-    image?: string
-  }
+  /**
+   * Override defaults for OG tags
+   */
+  og?: BaseMeta
 
-  // Optional overrides for Twitter cards
-  twitter?: {
-    description?: string
-    title?: string
-    image?: string
-  }
+  /**
+   * Override defaults for Twitter tags
+   */
+  twitter?: BaseMeta
 
-  // Optional: custom OG image query params
-  ogCustom?: {
-    name?: string
-    jobTitle?: string
-    city?: string
-    country?: string
-    avatar?: string
-  }
+  /**
+   * Extra query params appended to the OG image URL
+   * for dynamic OG generators.
+   */
+  ogCustom?: OgCustomParams
 }

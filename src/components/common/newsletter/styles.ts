@@ -1,5 +1,5 @@
 import { styled, keyframes } from 'stitches.config'
-import * as Dialog from '@radix-ui/react-dialog';
+import * as Dialog from '@radix-ui/react-dialog'
 
 export const Container = styled('div', {})
 
@@ -7,73 +7,117 @@ export const {
   Root,
   Trigger,
   Close,
-  Portal
+  Portal,
 } = Dialog
 
 const overlayShow = keyframes({
   '0%': { opacity: 0 },
   '100%': { opacity: 1 },
-});
+})
 
 const contentShow = keyframes({
   '0%': { opacity: 0, transform: 'translate(-50%, -48%) scale(.96)' },
   '100%': { opacity: 1, transform: 'translate(-50%, -50%) scale(1)' },
-});
+})
 
 export const Overlay = styled(Dialog.Overlay, {
-  backgroundColor: 'transparent',
   position: 'fixed',
   inset: 0,
-  animation: `${overlayShow} 150ms cubic-bezier(0.16, 1, 0.3, 1)`,
-  backdropFilter: 'blur(6px)',
   zIndex: 88,
-});
-
+  backgroundColor: 'rgba(0,0,0,0.35)',
+  backdropFilter: 'blur(8px)',
+  WebkitBackdropFilter: 'blur(8px)',
+  animation: `${overlayShow} 150ms cubic-bezier(0.16, 1, 0.3, 1) forwards`,
+})
 
 export const Content = styled(Dialog.Content, {
-  backgroundColor: '#fff',
-  borderRadius: '8px',
-  boxShadow: 'hsl(206 22% 7% / 35%) 0px 10px 38px -10px, hsl(206 22% 7% / 20%) 0px 10px 20px -15px',
   position: 'fixed',
   top: '50%',
   left: '50%',
   transform: 'translate(-50%, -50%)',
-  width: '90vw',
-  maxWidth: '750px',
+  zIndex: 89,
+
+  width: 'min(90vw, 720px)',
   maxHeight: '85vh',
-  animation: `${contentShow} 150ms cubic-bezier(0.16, 1, 0.3, 1)`,
-  '&:focus': { outline: 'none' },
-  overflow: 'hidden',
+
   display: 'flex',
-  zIndex: 88,
-});
+  flexDirection: 'row',
+  overflow: 'hidden',
+
+  backgroundColor: '$white',
+  borderRadius: '18px',
+  boxShadow:
+    '0 18px 45px rgba(15, 23, 42, 0.35), 0 10px 25px rgba(15, 23, 42, 0.18)',
+  animation: `${contentShow} 180ms cubic-bezier(0.16, 1, 0.3, 1) forwards`,
+  '&:focus': { outline: 'none' },
+
+  '@media (max-width: 768px)': {
+    width: '92vw',
+    maxWidth: '92vw',
+    maxHeight: '90vh',
+    flexDirection: 'column',
+    borderRadius: '16px',
+  },
+})
 
 export const Figure = styled('figure', {
-  width: '400px',
   position: 'relative',
-  height: '400px',
+  margin: 0,
+
+  width: '45%',
+  minWidth: '260px',
+  maxWidth: '320px',
+
+  // Force a nice visual block for the image
+  aspectRatio: '1',
+  overflow: 'hidden',
+
+  background:
+    'radial-gradient(circle at top left, rgba(99,102,241,0.35), transparent 55%), radial-gradient(circle at bottom right, rgba(236,72,153,0.4), transparent 50%)',
+
   img: {
-    objectFit: 'cover'
-  }
+    objectFit: 'cover',
+  },
+
+  '@media (max-width: 768px)': {
+    width: '100%',
+    maxWidth: '100%',
+    aspectRatio: '16 / 9',
+  },
 })
 
 export const FormView = styled('div', {
-  padding: '1rem',
   flex: 1,
+  padding: '1.5rem 1.5rem 1.25rem',
   display: 'flex',
   flexDirection: 'column',
   justifyContent: 'center',
-  gap: '1rem'
+  gap: '1rem',
+  backgroundColor: '$background',
+
+  '@media (max-width: 768px)': {
+    padding: '1.25rem 1.25rem 1rem',
+  },
 })
 
 export const Form = styled('form', {
   display: 'flex',
   flexDirection: 'column',
-  gap: '1rem'
+  gap: '0.75rem',
+
+  '@media (min-width: 480px)': {
+    gap: '1rem',
+  },
 })
 
 export const ButtonIconView = styled('div', {
   position: 'absolute',
-  top: '20px',
-  right: '20px'
+  top: '14px',
+  right: '14px',
+  zIndex: 90,
+
+  '@media (max-width: 768px)': {
+    top: '10px',
+    right: '10px',
+  },
 })

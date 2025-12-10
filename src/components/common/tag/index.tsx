@@ -1,15 +1,20 @@
-import { PropsWithChildren } from 'react'
+import type { PropsWithChildren, ComponentProps } from 'react'
 
 import * as Styles from './styles'
-import { TagProps } from './types'
+import type { TagProps } from './types'
 
-export function Tag (props: PropsWithChildren<TagProps>) {
-  const {
-    variant,
-    children
-  } = props
+type TagComponentProps = PropsWithChildren<
+  TagProps & ComponentProps<typeof Styles.Container>
+>
+
+export function Tag(props: TagComponentProps) {
+  const { variant, children, ...rest } = props
 
   return (
-    <Styles.Container variant={variant}>{children}</Styles.Container>
+    <Styles.Container variant={variant} {...rest}>
+      {children}
+    </Styles.Container>
   )
 }
+
+export default Tag

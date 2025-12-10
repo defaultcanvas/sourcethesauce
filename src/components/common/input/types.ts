@@ -1,8 +1,8 @@
-import { VariantProps } from '@stitches/react'
-import { InputHTMLAttributes, KeyboardEvent } from 'react'
+import type { VariantProps } from '@stitches/react'
+import type { InputHTMLAttributes, KeyboardEvent } from 'react'
 
 import { Container } from './styles'
-import { IconProps } from '@/components/common/icon/types'
+import type { IconProps } from '@/components/common/icon/types'
 
 type RootInputProps = Pick<
   InputHTMLAttributes<HTMLInputElement>,
@@ -22,6 +22,7 @@ type RootInputProps = Pick<
   | 'readOnly'
   | 'onMouseDown'
   | 'required'
+  | 'value'
 >
 
 type InputStylesProps = Pick<VariantProps<typeof Container>, 'fullWidth'>
@@ -34,7 +35,6 @@ export interface InputProps extends RootInputProps, InputStylesProps {
   rightIcon?: IconProps
   onRightIconClick?: () => void
   onLeftIconClick?: () => void
-  value?: string
   onMask?: (event: KeyboardEvent<HTMLInputElement>) => void
   format?: 'string' | 'number'
   loading?: boolean
