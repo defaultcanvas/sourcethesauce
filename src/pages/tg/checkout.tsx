@@ -354,6 +354,62 @@ export default function CheckoutPage() {
     }
   }, [])
 
+  // Prefill form with user's default/saved address if available
+  useEffect(() => {
+    let cancelled = false
+
+    const loadDefaultAddress = async () => {
+      try {
+        if (!user?.id && !telegramUser?.id) return
+
+        // Try to find a default address first, then most recent
+        let q = supabase
+          .from('addresses')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(1)
+
+        if (user?.id) {
+          q = q.eq('user_id', user.id)
+        } else if (telegramUser?.id) {
+          q = q.eq('telegram_id', String(telegramUser.id))
+        }
+
+        const { data } = await q
+        let addr = Array.isArray(data) && data.length > 0 ? data[0] : null
+
+        // If no address from DB, try localStorage fallback
+        if (!addr) {
+          try {
+            const raw = localStorage.getItem('local_addresses_v1')
+            const arr = raw ? JSON.parse(raw) : []
+            if (arr && arr.length > 0) addr = arr[0]
+          } catch (lsErr) {
+            console.error('Failed to read local addresses', lsErr)
+          }
+        }
+
+        if (!cancelled && addr) {
+          setFormData(prev => ({
+            ...prev,
+            fullName: addr.full_name || prev.fullName,
+            phone: addr.phone || prev.phone,
+            address: addr.address_line1 || addr.address || prev.address,
+            city: addr.city || prev.city,
+            postalCode: addr.postal_code || prev.postalCode,
+          }))
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    loadDefaultAddress()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id, telegramUser?.id])
+
   const shippingCost =
     totalPrice >= shippingSettings.freeShippingThreshold || totalPrice === 0
       ? 0
@@ -510,6 +566,30 @@ export default function CheckoutPage() {
         .insert(orderItems)
 
       if (itemsError) throw itemsError
+
+        // Persist shipping address to addresses table for future use
+        try {
+          const addressPayload: any = {
+            user_id: userId || null,
+            telegram_id: telegramUser?.id ? String(telegramUser.id) : null,
+            label: 'Home',
+            full_name: formData.fullName,
+            phone: formData.phone || null,
+            address_line1: formData.address,
+            address_line2: formData.address || null,
+            city: formData.city,
+            state: formData.city || null,
+            postal_code: formData.postalCode,
+            country: 'UK',
+            is_default: true,
+          }
+
+          // If addresses table exists, insert; ignore failures
+          await supabase.from('addresses').insert(addressPayload)
+        } catch (addrErr) {
+          // ignore address save errors
+          console.log('Address save skipped:', addrErr)
+        }
 
       await clearCart()
       successNotification()

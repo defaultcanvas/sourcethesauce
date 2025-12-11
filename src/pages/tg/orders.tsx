@@ -250,10 +250,26 @@ export default function OrdersPage() {
           `)
           .order('created_at', { ascending: false })
 
+        // Primary: match by authenticated user id
         if (user?.id) {
           query = query.eq('user_id', user.id)
         } else if (telegramUser?.id) {
-          query = query.eq('telegram_id', telegramUser.id)
+          // If the visitor is a Telegram-only user, try to find the corresponding
+          // telegram_users row that we create during checkout and use its id
+          // (orders were created with `user_id` referencing that row).
+          const { data: tu, error: tuErr } = await supabase
+            .from('telegram_users')
+            .select('id')
+            .eq('telegram_id', String(telegramUser.id))
+            .limit(1)
+            .maybeSingle()
+
+          if (tu && (tu as any).id) {
+            query = query.eq('user_id', (tu as any).id)
+          } else {
+            // Fallback: match orders that have a telegram_id column set
+            query = query.eq('telegram_id', String(telegramUser.id))
+          }
         }
 
         const { data, error } = await query

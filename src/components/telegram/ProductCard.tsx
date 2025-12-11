@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import Image from 'next/image'
 import { styled } from 'stitches.config'
+import { useCallback } from 'react'
+import { useWishlist } from '@/context/telegram-wishlist'
 
 const Card = styled(Link, {
   display: 'block',
@@ -39,6 +41,22 @@ const ImageOverlay = styled('div', {
   alignItems: 'center',
   justifyContent: 'space-between',
   gap: 8,
+})
+
+const HeartButton = styled('button', {
+  border: 'none',
+  background: 'transparent',
+  color: 'rgba(255,255,255,0.95)',
+  width: 36,
+  height: 36,
+  borderRadius: 999,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  transition: 'transform 0.12s ease',
+
+  '&:active': { transform: 'scale(0.95)' },
 })
 
 const SkuText = styled('span', {
@@ -196,6 +214,9 @@ export function ProductCard({
 }: ProductCardProps) {
   const discount = oldPrice ? Math.round((1 - price / oldPrice) * 100) : 0
 
+  const { isInWishlist, toggleWishlist } = useWishlist()
+  const inWishlist = isInWishlist(id)
+
   // Prioritise badge: New > Sale > Hot
   let badgeType: 'new' | 'sale' | 'hot' | undefined
   let badgeLabel: string | undefined
@@ -228,7 +249,31 @@ export function ProductCard({
         {badgeType && badgeLabel && <Badge type={badgeType}>{badgeLabel}</Badge>}
         <ImageOverlay>
           <SkuText>{sku}</SkuText>
-          <QuickTag>View details</QuickTag>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <QuickTag>View details</QuickTag>
+            <HeartButton
+              aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+              onClick={async (e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                try {
+                  await toggleWishlist(id)
+                } catch (err) {
+                  console.error('Wishlist toggle failed', err)
+                }
+              }}
+            >
+              {inWishlist ? (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="0">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+              ) : (
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
+                </svg>
+              )}
+            </HeartButton>
+          </div>
         </ImageOverlay>
       </ImageContainer>
 
@@ -359,6 +404,8 @@ export function ProductCardCompact({
   const safeImage =
     image ||
     'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=400&fit=crop'
+  const { isInWishlist, toggleWishlist } = useWishlist()
+  const inWishlist = isInWishlist(id)
 
   return (
     <CompactCard href={`/tg/product/${id}/${sku}`} aria-label={name}>
@@ -370,6 +417,30 @@ export function ProductCardCompact({
           style={{ objectFit: 'cover' }}
           sizes="130px"
         />
+        <div style={{ position: 'absolute', top: 6, right: 6 }}>
+          <HeartButton
+            aria-label={inWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+            onClick={async (e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              try {
+                await toggleWishlist(id)
+              } catch (err) {
+                console.error('Wishlist toggle failed', err)
+              }
+            }}
+          >
+            {inWishlist ? (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="0">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
+              </svg>
+            ) : (
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78L12 21.23l8.84-8.84a5.5 5.5 0 0 0 0-7.78z" />
+              </svg>
+            )}
+          </HeartButton>
+        </div>
         {isNew && <CompactBadge>New</CompactBadge>}
       </CompactImageContainer>
       <CompactInfo>

@@ -203,44 +203,89 @@ const AddButton = styled('button', {
 interface Address {
   id: string
   label: string
-  name: string
+  full_name: string
   phone: string
-  address: string
+  address_line1: string
+  address_line2?: string | null
   city: string
+  state?: string | null
   postal_code: string
+  country?: string | null
   is_default: boolean
 }
 
 export default function AddressesPage() {
   const router = useRouter()
-  const { user } = useTelegramAuth()
+  const { user, telegramUser } = useTelegramAuth()
   const [addresses, setAddresses] = useState<Address[]>([])
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    // For now, show empty state since addresses table may not exist
-    // In a real app, fetch from supabase
-    setIsLoading(false)
-    
-    // Demo addresses for UI preview
-    // setAddresses([
-    //   {
-    //     id: '1',
-    //     label: 'Home',
-    //     name: 'John Smith',
-    //     phone: '+44 7700 900000',
-    //     address: '123 Main Street, Apt 4B',
-    //     city: 'London',
-    //     postal_code: 'SW1A 1AA',
-    //     is_default: true,
-    //   }
-    // ])
-  }, [user?.id])
+    let cancelled = false
+
+    const loadAddresses = async () => {
+      setIsLoading(true)
+      try {
+        if (!user?.id && !user?.telegram_id) {
+          // try telegramUser fallback
+          if (!user?.id && !telegramUser?.id) {
+            setAddresses([])
+            setIsLoading(false)
+            return
+          }
+        }
+
+        let q = supabase.from('addresses').select('*').order('created_at', { ascending: false })
+        if (user?.id) {
+          q = q.eq('user_id', user.id)
+        } else if (telegramUser?.id) {
+          q = q.eq('telegram_id', String(telegramUser.id))
+        }
+
+        const { data, error } = await q
+
+        if (error) {
+          console.error('Error loading addresses:', error)
+          // Try localStorage fallback
+          try {
+            const raw = localStorage.getItem('local_addresses_v1')
+            const arr = raw ? JSON.parse(raw) : []
+            if (!cancelled) setAddresses(arr)
+          } catch (lsErr) {
+            console.error('Local addresses load failed', lsErr)
+            if (!cancelled) setAddresses([])
+          }
+        } else if (!cancelled) {
+          // If DB returned empty, try localStorage as well
+          const list = (data as any[]) || []
+          if (list.length === 0) {
+            try {
+              const raw = localStorage.getItem('local_addresses_v1')
+              const arr = raw ? JSON.parse(raw) : []
+              setAddresses(arr)
+            } catch (lsErr) {
+              console.error('Local addresses load failed', lsErr)
+              setAddresses(list)
+            }
+          } else {
+            setAddresses(list)
+          }
+        }
+      } catch (e) {
+        console.error('Error loading addresses:', e)
+        setAddresses([])
+      } finally {
+        if (!cancelled) setIsLoading(false)
+      }
+    }
+
+    loadAddresses()
+    return () => { cancelled = true }
+  }, [user?.id, telegramUser?.id])
 
   const handleAddAddress = () => {
     lightImpact()
-    // Navigate to add address form or show modal
-    router.push('/tg/checkout')
+    router.push('/tg/addresses/new')
   }
 
   return (
@@ -290,10 +335,10 @@ export default function AddressesPage() {
                     {address.is_default && <DefaultBadge>Default</DefaultBadge>}
                   </AddressHeader>
                   <AddressText>
-                    {address.name}<br/>
+                    {address.full_name}<br/>
                     {address.phone}<br/>
-                    {address.address}<br/>
-                    {address.city}, {address.postal_code}
+                    {address.address_line1}{address.address_line2 ? `, ${address.address_line2}` : ''}<br/>
+                    {address.city}{address.state ? `, ${address.state}` : ''}, {address.postal_code}
                   </AddressText>
                   <AddressActions>
                     <ActionButton variant="secondary">Edit</ActionButton>

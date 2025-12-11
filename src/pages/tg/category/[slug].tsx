@@ -233,14 +233,87 @@ export default function CategoryPage({ category, subcategories, products }: Cate
 }
 
 export const getServerSideProps: GetServerSideProps<CategoryPageProps> = async ({ params }) => {
-  const slug = params?.slug as string
+    const slug = params?.slug as string
 
-  // First, try to get as a category
-  const { data: category } = await supabase
-    .from('categories')
-    .select('*')
-    .eq('slug', slug)
-    .single()
+    // Special synthetic pages: 'new' (New Arrivals) and 'featured'
+    if (slug === 'new') {
+      const { data: products } = await supabase
+        .from('products')
+        .select(`
+        *,
+        images:product_images(url, position)
+      `)
+        .eq('is_active', true)
+        .eq('is_new', true)
+        .order('created_at', { ascending: false })
+
+      const mappedProducts = products?.map((p: any) => ({
+        id: p.id,
+        sku: p.sku || p.id,
+        name: p.name,
+        price: p.price,
+        is_new: p.is_new,
+        images: p.images?.sort((a: any, b: any) => a.position - b.position).map((img: any) => img.url) || [],
+      })) || []
+
+      return {
+        props: {
+          category: {
+            id: 'new',
+            name: 'New Arrivals',
+            slug: 'new',
+          },
+          subcategories: [],
+          products: mappedProducts,
+        },
+      }
+    }
+
+    if (slug === 'featured') {
+      // Fetch featured products list
+      const { data: featuredProducts } = await supabase
+        .from('featured_products')
+        .select(`
+          *,
+          product:products(*, images:product_images(url, position))
+        `)
+        .eq('section_name', 'featured')
+        .order('sort_order', { ascending: true })
+
+      const mappedProducts =
+        featuredProducts?.map((fp: any) =>
+          fp.product
+            ? {
+                id: fp.product.id,
+                sku: fp.product.sku || fp.product.id,
+                name: fp.product.name,
+                price: fp.product.price,
+                is_new: fp.product.is_new,
+                images:
+                  fp.product.images?.sort((a: any, b: any) => a.position - b.position).map((img: any) => img.url) || [],
+              }
+            : null
+        ).filter(Boolean) || []
+
+      return {
+        props: {
+          category: {
+            id: 'featured',
+            name: 'Featured',
+            slug: 'featured',
+          },
+          subcategories: [],
+          products: mappedProducts,
+        },
+      }
+    }
+
+    // First, try to get as a category
+    const { data: category } = await supabase
+      .from('categories')
+      .select('*')
+      .eq('slug', slug)
+      .single()
 
   // If not found as category, check if it's a subcategory and redirect
   if (!category) {
