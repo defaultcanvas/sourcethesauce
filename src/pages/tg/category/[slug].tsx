@@ -389,6 +389,8 @@ export const getServerSideProps: GetServerSideProps<CategoryPageProps> = async (
     images: p.images?.sort((a: any, b: any) => a.position - b.position).map((img: any) => img.url) || [],
   })) || []
 
+  const visibleSubcategories = subcategoriesWithCounts.filter((s) => s.product_count > 0)
+
   return {
     props: {
       category: {
@@ -396,7 +398,7 @@ export const getServerSideProps: GetServerSideProps<CategoryPageProps> = async (
         name: category.name,
         slug: category.slug,
       },
-      subcategories: subcategoriesWithCounts,
+      subcategories: visibleSubcategories,
       products: mappedProducts,
     }
   }

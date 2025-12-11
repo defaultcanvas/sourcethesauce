@@ -152,11 +152,44 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       }
     })) || []
 
-    // Transform collection_banners to expected format
-    const transformedCollectionBanners = collectionBanners?.map((item: any) => ({
+    // Transform collection_banners to expected format and filter out empty collections
+    const transformedCollectionBannersRaw = collectionBanners?.map((item: any) => ({
       image: item.image_url,
-      collection_type: item.metadata?.collection_type || item.title?.toLowerCase()
+      collection_type: item.metadata?.collection_type || item.title?.toLowerCase(),
+      // derive slug from metadata.collection_type or action_path (/c/slug)
+      slug: item.metadata?.collection_type || (item.action_path ? item.action_path.split('/').filter(Boolean).pop() : null)
     })) || []
+
+    // For each banner, check if there are any active products in that category (by slug)
+    const transformedCollectionBanners = [] as any[]
+    for (const banner of transformedCollectionBannersRaw) {
+      if (!banner.slug) continue
+
+      // Find category by slug
+      const { data: cat } = await supabase
+        .from('categories')
+        .select('id')
+        .eq('slug', banner.slug)
+        .single()
+
+      if (!cat) continue
+
+      // Count active products in that category
+      const { count: productCount } = await supabase
+        .from('products')
+        .select('id', { count: 'exact' })
+        .eq('category_id', cat.id)
+        .eq('is_active', true)
+
+      if (productCount && productCount > 0) {
+        transformedCollectionBanners.push({
+          image: banner.image,
+          collection_type: banner.collection_type,
+          slug: banner.slug,
+          product_count: productCount
+        })
+      }
+    }
 
     // Transform collections to expected format
     const transformedCollections = collections?.map((item: any) => ({

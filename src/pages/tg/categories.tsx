@@ -146,9 +146,32 @@ export const getServerSideProps: GetServerSideProps<CategoriesPageProps> = async
     .select('*')
     .order('sort_order', { ascending: true })
 
+  const cats = (categories || []) as any[]
+
+  // For each category, compute product count and only include categories with products
+  const categoriesWithCounts = await Promise.all(
+    cats.map(async (cat) => {
+      const { count } = await supabase
+        .from('products')
+        .select('id', { count: 'exact' })
+        .eq('category_id', cat.id)
+        .eq('is_active', true)
+
+      return {
+        id: cat.id,
+        name: cat.name,
+        slug: cat.slug,
+        image_url: cat.image_url,
+        product_count: count || 0,
+      }
+    })
+  )
+
+  const visibleCategories = categoriesWithCounts.filter((c) => c.product_count > 0)
+
   return {
     props: {
-      categories: categories || [],
+      categories: visibleCategories,
     }
   }
 }

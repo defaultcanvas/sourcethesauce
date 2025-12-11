@@ -746,6 +746,28 @@ export const getServerSideProps: GetServerSideProps<TelegramHomeProps> = async (
       .select('*')
       .order('sort_order', { ascending: true })
 
+    // Filter out categories that have no active products
+    const categoriesList = (categories || []) as any[]
+    const categoriesWithCounts = await Promise.all(
+      categoriesList.map(async (cat) => {
+        const { count } = await supabase
+          .from('products')
+          .select('id', { count: 'exact' })
+          .eq('category_id', cat.id)
+          .eq('is_active', true)
+
+        return {
+          id: cat.id,
+          name: cat.name,
+          slug: cat.slug,
+          image_url: cat.image_url,
+          product_count: count || 0,
+        }
+      })
+    )
+
+    const visibleCategories = categoriesWithCounts.filter((c) => c.product_count > 0)
+
     // Fetch new arrivals (products with is_new = true)
     const { data: newProducts } = await supabase
       .from('products')
@@ -790,7 +812,7 @@ export const getServerSideProps: GetServerSideProps<TelegramHomeProps> = async (
     return {
       props: {
         hero,
-        categories: categories || [],
+        categories: visibleCategories || [],
         newArrivals: newProducts?.map(mapProduct) || [],
         featured:
           featuredProducts
