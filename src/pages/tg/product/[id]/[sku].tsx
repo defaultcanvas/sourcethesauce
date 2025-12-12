@@ -655,25 +655,31 @@ export default function ProductPage({ product }: ProductPageProps) {
     await toggleWishlist(product.id)
   }, [product, toggleWishlist])
 
+  // Hide the native Telegram MainButton on product pages to avoid
+  // showing a duplicate "Add to Cart" CTA. We only use our
+  // in-page quantity controls and green Add button.
   useEffect(() => {
     const webApp = getTelegramWebApp()
-    if (webApp && product && selectedVariant) {
-      webApp.MainButton.setParams({
-        text: isAddingToCart
-          ? 'Adding...'
-          : `Add to Cart - £${product.price.toFixed(2)}`,
-        is_visible: true,
-        is_active: !isAddingToCart,
-      })
-
-      webApp.MainButton.onClick(handleAddToCart)
-
-      return () => {
-        webApp.MainButton.offClick(handleAddToCart)
+    if (webApp) {
+      try {
         webApp.MainButton.hide()
+      } catch (err) {
+        // be resilient if Telegram WebApp isn't fully available
+        // or API shape differs in some environments
+        // eslint-disable-next-line no-console
+        console.warn('Unable to hide Telegram MainButton', err)
       }
     }
-  }, [product, selectedVariant, isAddingToCart, handleAddToCart])
+
+    return () => {
+      const webApp = getTelegramWebApp()
+      if (webApp) {
+        try {
+          webApp.MainButton.hide()
+        } catch {}
+      }
+    }
+  }, [])
 
   if (!product) {
     return (

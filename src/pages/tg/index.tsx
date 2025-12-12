@@ -2,7 +2,8 @@ import { GetServerSideProps } from 'next'
 import Head from 'next/head'
 import Image from 'next/image'
 import Link from 'next/link'
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
+import Fuse from 'fuse.js'
 import { styled } from 'stitches.config'
 import { TelegramLayout, ProductCard } from '@/components/telegram'
 import { supabase } from '@/lib/supabase'
@@ -409,6 +410,8 @@ interface TelegramHomeProps {
     price: number
     is_new: boolean
     images: string[]
+    description?: string
+    brand?: string
   }>
   featured: Array<{
     id: string
@@ -417,6 +420,8 @@ interface TelegramHomeProps {
     price: number
     is_new: boolean
     images: string[]
+    description?: string
+    brand?: string
   }>
 }
 
@@ -430,23 +435,46 @@ export default function TelegramHome({
 }: TelegramHomeProps) {
   const { totalItems } = useCart()
   const [searchTerm, setSearchTerm] = useState('')
+  const [searchResults, setSearchResults] = useState<any[]>([])
+  const [searchLoading, setSearchLoading] = useState(false)
 
   const allProducts = useMemo(
     () => [...newArrivals, ...featured],
     [newArrivals, featured]
   )
 
-  const filteredProducts = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase()
-    if (!term) return []
-    return allProducts.filter((p) => {
-      const name = p.name?.toLowerCase() ?? ''
-      const sku = p.sku?.toLowerCase() ?? ''
-      return name.includes(term) || sku.includes(term)
-    })
-  }, [allProducts, searchTerm])
+  // When user types a search, query the server-side search API (full catalog)
+  useEffect(() => {
+    const q = searchTerm.trim()
+    if (q.length < 2) {
+      setSearchResults([])
+      setSearchLoading(false)
+      return
+    }
 
-  const hasSearchResults = searchTerm.trim().length > 0 && filteredProducts.length > 0
+    let cancelled = false
+    setSearchLoading(true)
+
+    const handle = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(q)}&limit=50`)
+        if (!res.ok) throw new Error('Search failed')
+        const json = await res.json()
+        if (!cancelled) setSearchResults(json.products || [])
+      } catch (e) {
+        if (!cancelled) setSearchResults([])
+      } finally {
+        if (!cancelled) setSearchLoading(false)
+      }
+    }, 300)
+
+    return () => {
+      cancelled = true
+      clearTimeout(handle)
+    }
+  }, [searchTerm])
+
+  const hasSearchResults = searchTerm.trim().length > 0 && searchResults.length > 0
   const isSearching = searchTerm.trim().length > 0
 
   return (
@@ -548,24 +576,23 @@ export default function TelegramHome({
                   <SectionTitle>Search results</SectionTitle>
                   <SectionHint>
                     {hasSearchResults
-                      ? `${filteredProducts.length} item${filteredProducts.length > 1 ? 's' : ''} found`
+                      ? `${searchResults.length} item${searchResults.length > 1 ? 's' : ''} found`
                       : 'No matches in current drop'}
                   </SectionHint>
                 </div>
               </SectionHeader>
-              {hasSearchResults ? (
+              {searchLoading ? (
+                <EmptyState>Searching…</EmptyState>
+              ) : searchResults.length > 0 ? (
                 <ProductsGrid>
-                  {filteredProducts.map((product) => (
+                  {searchResults.map((product) => (
                     <ProductCard
                       key={product.id}
                       id={product.id}
                       sku={product.sku}
                       name={product.name}
-                      price={product.price}
-                      image={
-                        product.images[0] ||
-                        'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=500&fit=crop'
-                      }
+                      price={product.final_price || product.price}
+                      image={product.image || product.images?.[0] || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=400&h=500&fit=crop'}
                       isNew={product.is_new}
                     />
                   ))}
@@ -807,6 +834,8 @@ export const getServerSideProps: GetServerSideProps<TelegramHomeProps> = async (
       images:
         p.images?.sort((a: any, b: any) => a.position - b.position).map((img: any) => img.url) ||
         [],
+      description: p.description || p.subtitle || '',
+      brand: p.brand || '',
     })
 
     return {
