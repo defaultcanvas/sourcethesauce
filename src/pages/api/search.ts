@@ -47,7 +47,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // If the query is a clear brand or sku substring match, prefer those
     const qLower = query.toLowerCase()
-    const directMatches = list.filter((p) => (
+    const directMatches = list.filter((p: any) => (
       (p.brand && p.brand.toLowerCase().includes(qLower)) ||
       (p.sku && p.sku.toLowerCase().includes(qLower)) ||
       (p.name && p.name.toLowerCase().includes(qLower))
