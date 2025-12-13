@@ -116,7 +116,26 @@ export function WishlistProvider({ children }: WishlistProviderProps) {
 
     setIsLoading(true)
     try {
-      let query = supabase
+      // Get actual user_id from telegram_users if needed
+      let actualUserId = userId
+      
+      if (!actualUserId && telegramId) {
+        const { data: telegramUserData } = await supabase
+          .from('telegram_users')
+          .select('id')
+          .eq('telegram_id', telegramId.toString())
+          .single()
+        
+        actualUserId = telegramUserData?.id
+      }
+
+      if (!actualUserId) {
+        setItems([])
+        setIsLoading(false)
+        return
+      }
+
+      const { data, error } = await supabase
         .from('wishlist')
         .select(`
           id,
@@ -130,14 +149,7 @@ export function WishlistProvider({ children }: WishlistProviderProps) {
             images:product_images(url, position)
           )
         `)
-
-      if (userId) {
-        query = query.eq('user_id', userId)
-      } else if (telegramId) {
-        query = query.eq('telegram_id', telegramId)
-      }
-
-      const { data, error } = await query
+        .eq('user_id', actualUserId)
 
       if (error) {
         console.error('Error fetching wishlist:', error)
@@ -225,20 +237,49 @@ export function WishlistProvider({ children }: WishlistProviderProps) {
 
     // Authenticated path: insert into DB
     try {
-      const wishlistItem: any = {
-        product_id: productId,
+      // Get or create user_id from telegram_users table
+      let actualUserId = userId
+      
+      if (!actualUserId && telegramId) {
+        // Try to find existing user
+        const { data: existingUser } = await supabase
+          .from('telegram_users')
+          .select('id')
+          .eq('telegram_id', telegramId.toString())
+          .single()
+        
+        if (existingUser) {
+          actualUserId = existingUser.id
+        } else {
+          // Create new user
+          const { data: newUser, error: userError } = await supabase
+            .from('telegram_users')
+            .insert({
+              telegram_id: telegramId.toString(),
+              first_name: 'User',
+            })
+            .select('id')
+            .single()
+          
+          if (userError || !newUser) {
+            console.error('Error creating user:', userError)
+            return
+          }
+          actualUserId = newUser.id
+        }
       }
 
-      if (userId) {
-        wishlistItem.user_id = userId
-      }
-      if (telegramId) {
-        wishlistItem.telegram_id = telegramId
+      if (!actualUserId) {
+        console.error('Could not determine user ID')
+        return
       }
 
       const { error } = await supabase
         .from('wishlist')
-        .insert(wishlistItem)
+        .insert({
+          product_id: productId,
+          user_id: actualUserId,
+        })
 
       if (error) {
         console.error('Error adding to wishlist:', error)
@@ -272,18 +313,26 @@ export function WishlistProvider({ children }: WishlistProviderProps) {
     }
 
     try {
-      let query = supabase
+      // Get actual user_id from telegram_users if needed
+      let actualUserId = userId
+      
+      if (!actualUserId && telegramId) {
+        const { data: telegramUserData } = await supabase
+          .from('telegram_users')
+          .select('id')
+          .eq('telegram_id', telegramId.toString())
+          .single()
+        
+        actualUserId = telegramUserData?.id
+      }
+
+      if (!actualUserId) return
+
+      const { error } = await supabase
         .from('wishlist')
         .delete()
         .eq('product_id', productId)
-
-      if (userId) {
-        query = query.eq('user_id', userId)
-      } else if (telegramId) {
-        query = query.eq('telegram_id', telegramId)
-      }
-
-      const { error } = await query
+        .eq('user_id', actualUserId)
 
       if (error) {
         console.error('Error removing from wishlist:', error)

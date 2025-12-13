@@ -1,5 +1,11 @@
 import type { NextApiRequest, NextApiResponse } from 'next'
 import { supabaseAdmin } from '@/lib/supabase'
+import Stripe from 'stripe'
+import { serverEnvironments } from '@/constants/environments'
+
+const stripe = new Stripe(serverEnvironments.stripe.secretKey, {
+  apiVersion: '2023-10-16',
+})
 
 // Generate order number
 function generateOrderNumber(): string {
@@ -70,7 +76,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     }
   }
 
-  // POST - Create order
+  // POST - Create order (requires valid Stripe payment)
   if (req.method === 'POST') {
     const {
       userId,
@@ -78,7 +84,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       sessionId,
       shippingAddress,
       billingAddress,
-      paymentMethod,
+      paymentIntentId, // Required - Stripe payment intent ID
       notes,
     } = req.body
 
@@ -90,7 +96,35 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'shippingAddress is required' })
     }
 
+    // ENFORCE PAYMENT - No COD allowed
+    if (!paymentIntentId) {
+      return res.status(400).json({ 
+        error: 'Payment is required. Cash on delivery is not available.',
+        code: 'PAYMENT_REQUIRED'
+      })
+    }
+
     try {
+      // Verify the payment intent with Stripe
+      let paymentIntent: Stripe.PaymentIntent
+      try {
+        paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+      } catch (stripeError: any) {
+        console.error('Stripe payment verification failed:', stripeError)
+        return res.status(400).json({ 
+          error: 'Invalid payment. Please complete payment first.',
+          code: 'INVALID_PAYMENT'
+        })
+      }
+
+      // Check payment status
+      if (paymentIntent.status !== 'succeeded') {
+        return res.status(400).json({ 
+          error: `Payment not completed. Status: ${paymentIntent.status}`,
+          code: 'PAYMENT_NOT_COMPLETE'
+        })
+      }
+
       let profileId = userId as string | undefined
 
       // If telegramId provided, get the profile ID
@@ -175,15 +209,25 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       const taxAmount = 0 // Can be calculated based on location
       const total = subtotal - discountAmount + shippingCost + taxAmount
 
-      // Create order
+      // Verify that payment amount matches order total (with small tolerance for rounding)
+      const paymentAmountInPounds = paymentIntent.amount / 100
+      if (Math.abs(paymentAmountInPounds - total) > 0.01) {
+        return res.status(400).json({ 
+          error: 'Payment amount does not match order total',
+          code: 'AMOUNT_MISMATCH'
+        })
+      }
+
+      // Create order with payment already verified
       const { data: order, error: orderError } = await supabaseAdmin
         .from('orders')
         .insert({
           order_number: generateOrderNumber(),
           user_id: profileId || null,
-          status: 'pending',
-          payment_status: 'pending',
-          payment_method: paymentMethod || null,
+          status: 'confirmed', // Auto-confirm since payment is verified
+          payment_status: 'paid', // Payment is verified
+          payment_method: 'stripe',
+          payment_id: paymentIntentId,
           subtotal: Math.round(subtotal * 100) / 100,
           discount_amount: Math.round(discountAmount * 100) / 100,
           shipping_cost: shippingCost,

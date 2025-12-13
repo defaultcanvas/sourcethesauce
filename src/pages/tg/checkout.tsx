@@ -1,11 +1,14 @@
 import Head from 'next/head'
 import { useRouter } from 'next/router'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { styled, keyframes } from 'stitches.config'
+import { Elements } from '@stripe/react-stripe-js'
 import { TelegramLayout } from '@/components/telegram'
+import { StripePaymentForm } from '@/components/stripe'
 import { useCart } from '@/context/telegram-cart'
 import { useTelegramAuth } from '@/context/telegram-auth'
 import { supabase } from '@/lib/supabase'
+import { getStripe, createPaymentIntent } from '@/lib/stripe'
 import { getTelegramWebApp } from '@/lib/telegram/types'
 import { successNotification, errorNotification, lightImpact } from '@/lib/telegram/haptics'
 
@@ -243,7 +246,7 @@ const BottomBar = styled('div', {
   zIndex: 100,
 })
 
-const PlaceOrderButton = styled('button', {
+const ContinueButton = styled('button', {
   width: '100%',
   padding: '16px',
   borderRadius: 14,
@@ -296,14 +299,39 @@ const FreeShippingBadge = styled('div', {
   marginTop: 8,
 })
 
+const LoadingSpinner = styled('div', {
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: '40px',
+  color: 'var(--tg-theme-hint-color, #999)',
+  fontSize: 14,
+})
+
+const PaymentNotice = styled('div', {
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  padding: '12px 16px',
+  margin: '8px 12px',
+  backgroundColor: 'rgba(99, 102, 241, 0.08)',
+  borderRadius: 12,
+  color: '#6366f1',
+  fontSize: 13,
+  fontWeight: 600,
+})
+
 const DEFAULT_FREE_THRESHOLD = 50
 const DEFAULT_BASE_SHIPPING = 4.99
+
+type CheckoutStep = 'details' | 'payment'
 
 export default function CheckoutPage() {
   const router = useRouter()
   const { items, totalItems, totalPrice, clearCart } = useCart()
   const { user, telegramUser } = useTelegramAuth()
   
+  const [step, setStep] = useState<CheckoutStep>('details')
   const [formData, setFormData] = useState({
     fullName: user?.full_name || telegramUser?.first_name || '',
     phone: '',
@@ -315,13 +343,16 @@ export default function CheckoutPage() {
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState('')
+  const [clientSecret, setClientSecret] = useState<string | null>(null)
+  const [paymentIntentId, setPaymentIntentId] = useState<string | null>(null)
+  const [orderId, setOrderId] = useState<string | null>(null)
 
   const [shippingSettings, setShippingSettings] = useState({
     baseShippingCost: DEFAULT_BASE_SHIPPING,
     freeShippingThreshold: DEFAULT_FREE_THRESHOLD,
   })
 
-  // Load shipping settings from DB (small, non-breaking table)
+  // Load shipping settings from DB
   useEffect(() => {
     let cancelled = false
 
@@ -336,22 +367,17 @@ export default function CheckoutPage() {
 
         if (!error && data && !cancelled) {
           setShippingSettings({
-            baseShippingCost:
-              data.base_shipping_cost ?? DEFAULT_BASE_SHIPPING,
-            freeShippingThreshold:
-              data.free_shipping_threshold ?? DEFAULT_FREE_THRESHOLD,
+            baseShippingCost: data.base_shipping_cost ?? DEFAULT_BASE_SHIPPING,
+            freeShippingThreshold: data.free_shipping_threshold ?? DEFAULT_FREE_THRESHOLD,
           })
         }
       } catch (e) {
-        // Fallback to defaults silently
         console.log('Using default shipping settings', e)
       }
     }
 
     loadSettings()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [])
 
   // Prefill form with user's default/saved address if available
@@ -417,28 +443,28 @@ export default function CheckoutPage() {
 
   const finalTotal = totalPrice + shippingCost
 
-  // Telegram MainButton
+  // Stripe appearance options
+  const stripeAppearance = useMemo(() => ({
+    theme: 'stripe' as const,
+    variables: {
+      colorPrimary: '#6366f1',
+      colorBackground: 'var(--tg-theme-bg-color, #ffffff)',
+      colorText: 'var(--tg-theme-text-color, #000000)',
+      colorDanger: '#dc2626',
+      fontFamily: 'system-ui, sans-serif',
+      borderRadius: '12px',
+    },
+  }), [])
+
+  // Hide Telegram MainButton in payment step (Stripe has its own button)
   useEffect(() => {
     const webApp = getTelegramWebApp()
-    if (webApp && items.length > 0) {
-      const handleSubmit = () => {
-        handlePlaceOrder()
-      }
-
-      webApp.MainButton.setParams({
-        text: `Place Order - £${finalTotal.toFixed(2)}`,
-        is_visible: true,
-        is_active: !isSubmitting,
-      })
-      webApp.MainButton.onClick(handleSubmit)
-
-      return () => {
-        webApp.MainButton.offClick(handleSubmit)
+    if (webApp) {
+      if (step === 'payment') {
         webApp.MainButton.hide()
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items.length, finalTotal, isSubmitting])
+  }, [step])
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target
@@ -454,7 +480,8 @@ export default function CheckoutPage() {
     return null
   }
 
-  const handlePlaceOrder = async () => {
+  // Create user and order (pending payment), then initialize Stripe
+  const handleContinueToPayment = async () => {
     const validationError = validateForm()
     if (validationError) {
       setError(validationError)
@@ -470,7 +497,6 @@ export default function CheckoutPage() {
       // Ensure we have a user_id for the order
       let userId = user?.id
       
-      // If no user, try to create or find a guest user based on telegram_id
       if (!userId && telegramUser?.id) {
         const { data: existingUser } = await supabase
           .from('telegram_users')
@@ -492,15 +518,11 @@ export default function CheckoutPage() {
             .select('id')
             .single()
           
-          if (userError) {
-            console.error('Error creating user:', userError)
-            throw new Error('Could not create user account')
-          }
+          if (userError) throw new Error('Could not create user account')
           userId = newUser.id
         }
       }
       
-      // If still no userId, create a guest user with phone as identifier
       if (!userId) {
         const guestTelegramId = `guest_${formData.phone.replace(/\D/g, '')}_${Date.now()}`
         const { data: guestUser, error: guestError } = await supabase
@@ -512,22 +534,20 @@ export default function CheckoutPage() {
           .select('id')
           .single()
         
-        if (guestError) {
-          console.error('Error creating guest user:', guestError)
-          throw new Error('Could not create guest account')
-        }
+        if (guestError) throw new Error('Could not create guest account')
         userId = guestUser.id
       }
 
       // Generate order number
       const orderNumber = `ORD-${Date.now().toString(36).toUpperCase()}`
 
-      // Create order
+      // Create order with payment_status = 'pending'
       const orderData = {
         order_number: orderNumber,
         user_id: userId,
         status: 'pending',
         payment_status: 'pending',
+        payment_method: 'stripe',
         subtotal: totalPrice,
         shipping_amount: shippingCost,
         total: finalTotal,
@@ -547,7 +567,7 @@ export default function CheckoutPage() {
 
       if (orderError) throw orderError
 
-      // Order items
+      // Create order items
       const orderItems = items.map(item => ({
         order_id: order.id,
         product_id: item.product_id,
@@ -567,44 +587,125 @@ export default function CheckoutPage() {
 
       if (itemsError) throw itemsError
 
-        // Persist shipping address to addresses table for future use
-        try {
-          const addressPayload: any = {
-            user_id: userId || null,
-            telegram_id: telegramUser?.id ? String(telegramUser.id) : null,
-            label: 'Home',
-            full_name: formData.fullName,
-            phone: formData.phone || null,
-            address_line1: formData.address,
-            address_line2: formData.address || null,
-            city: formData.city,
-            state: formData.city || null,
-            postal_code: formData.postalCode,
-            country: 'UK',
-            is_default: true,
-          }
-
-          // If addresses table exists, insert; ignore failures
-          await supabase.from('addresses').insert(addressPayload)
-        } catch (addrErr) {
-          // ignore address save errors
-          console.log('Address save skipped:', addrErr)
+      // Persist shipping address to addresses table for future use
+      try {
+        const addressPayload: any = {
+          user_id: userId || null,
+          telegram_id: telegramUser?.id ? String(telegramUser.id) : null,
+          label: 'Home',
+          full_name: formData.fullName,
+          phone: formData.phone || null,
+          address_line1: formData.address,
+          address_line2: formData.address || null,
+          city: formData.city,
+          state: formData.city || null,
+          postal_code: formData.postalCode,
+          country: 'UK',
+          is_default: true,
         }
 
-      await clearCart()
-      successNotification()
+        // If addresses table exists, insert; ignore failures
+        await supabase.from('addresses').insert(addressPayload)
+      } catch (addrErr) {
+        // ignore address save errors
+        console.log('Address save skipped:', addrErr)
+      }
 
-      router.push(`/tg/order/${order.id}`)
+      setOrderId(order.id)
+
+      // Create Stripe payment intent
+      const { clientSecret, paymentIntentId } = await createPaymentIntent({
+        amount: finalTotal,
+        currency: 'gbp',
+        customerEmail: formData.email || undefined,
+        customerName: formData.fullName,
+        metadata: {
+          order_id: order.id,
+          order_number: orderNumber,
+        },
+      })
+
+      // Store payment intent ID in order
+      await supabase
+        .from('orders')
+        .update({ payment_id: paymentIntentId })
+        .eq('id', order.id)
+
+      setClientSecret(clientSecret)
+      setPaymentIntentId(paymentIntentId)
+      setStep('payment')
+      
     } catch (err: any) {
-      console.error('Error placing order:', err)
-      setError(err.message || 'Failed to place order. Please try again.')
+      console.error('Error preparing order:', err)
+      setError(err.message || 'Failed to prepare order. Please try again.')
       errorNotification()
     } finally {
       setIsSubmitting(false)
     }
   }
 
-  if (items.length === 0) {
+  // Handle successful payment
+  const handlePaymentSuccess = async (paymentIntentId: string) => {
+    try {
+      // Update order payment status
+      if (orderId) {
+        await supabase
+          .from('orders')
+          .update({
+            payment_status: 'paid',
+            status: 'confirmed',
+          })
+          .eq('id', orderId)
+      }
+
+      await clearCart()
+      successNotification()
+      router.push(`/tg/order/${orderId}`)
+    } catch (err) {
+      console.error('Error finalizing order:', err)
+      // Payment succeeded but order update failed - still redirect
+      // The webhook will handle the update
+      await clearCart()
+      router.push(`/tg/order/${orderId}`)
+    }
+  }
+
+  // Handle payment error
+  const handlePaymentError = async (errorMessage: string) => {
+    setError(errorMessage)
+    errorNotification()
+    
+    // Optionally cancel the pending order
+    if (orderId) {
+      await supabase
+        .from('orders')
+        .update({ 
+          payment_status: 'failed',
+          status: 'cancelled',
+        })
+        .eq('id', orderId)
+    }
+  }
+
+  // Go back from payment to details
+  const handleBackToDetails = async () => {
+    // Cancel the pending order if going back
+    if (orderId) {
+      await supabase
+        .from('orders')
+        .delete()
+        .eq('id', orderId)
+        .eq('payment_status', 'pending')
+    }
+    
+    setOrderId(null)
+    setClientSecret(null)
+    setPaymentIntentId(null)
+    setStep('details')
+    setError('')
+  }
+
+  if (items.length === 0 && !orderId) {
     router.push('/tg/cart')
     return null
   }
@@ -623,7 +724,7 @@ export default function CheckoutPage() {
       <TelegramLayout showNav={false}>
         <Container>
           <Header>
-            <BackButton onClick={() => router.back()}>
+            <BackButton onClick={step === 'payment' ? handleBackToDetails : () => router.back()}>
               <svg
                 width="20"
                 height="20"
@@ -637,7 +738,7 @@ export default function CheckoutPage() {
                 <path d="M12 19l-7-7 7-7" />
               </svg>
             </BackButton>
-            <Title>Checkout</Title>
+            <Title>{step === 'details' ? 'Checkout' : 'Payment'}</Title>
           </Header>
 
           <StepIndicator>
@@ -646,192 +747,226 @@ export default function CheckoutPage() {
               <span>Cart</span>
             </Step>
             <StepLine active />
-            <Step active>
-              <span className="dot">2</span>
+            <Step completed={step === 'payment'} active={step === 'details'}>
+              <span className="dot">{step === 'payment' ? '✓' : '2'}</span>
               <span>Details</span>
             </Step>
-            <StepLine />
-            <Step>
+            <StepLine active={step === 'payment'} />
+            <Step active={step === 'payment'}>
               <span className="dot">3</span>
-              <span>Done</span>
+              <span>Payment</span>
             </Step>
           </StepIndicator>
 
           {error && (
             <ErrorMessage>
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z" />
               </svg>
               {error}
             </ErrorMessage>
           )}
 
-          <Section>
-            <SectionTitle>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-                <circle cx="12" cy="7" r="4" />
-              </svg>
-              Contact Information
-            </SectionTitle>
-            <FormGroup>
-              <Label>Full Name *</Label>
-              <Input
-                name="fullName"
-                value={formData.fullName}
-                onChange={handleInputChange}
-                placeholder="John Smith"
-              />
-            </FormGroup>
-            <FormGroup>
-              <Label>Phone Number *</Label>
-              <Input
-                name="phone"
-                type="tel"
-                value={formData.phone}
-                onChange={handleInputChange}
-                placeholder="+44 7700 900000"
-              />
-            </FormGroup>
-            <FormGroup>
-              <Label>Email (Optional)</Label>
-              <Input
-                name="email"
-                type="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                placeholder="john@example.com"
-              />
-            </FormGroup>
-          </Section>
+          {step === 'details' && (
+            <>
+              <PaymentNotice>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm0 10.99h7c-.53 4.12-3.28 7.79-7 8.94V12H5V6.3l7-3.11v8.8z" />
+                </svg>
+                Secure payment with Stripe required
+              </PaymentNotice>
 
-          <Section>
-            <SectionTitle>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-                <circle cx="12" cy="10" r="3" />
-              </svg>
-              Delivery Address
-            </SectionTitle>
-            <FormGroup>
-              <Label>Street Address *</Label>
-              <Input
-                name="address"
-                value={formData.address}
-                onChange={handleInputChange}
-                placeholder="123 Main Street, Apt 4B"
-              />
-            </FormGroup>
-            <FormGroup>
-              <Label>City *</Label>
-              <Input
-                name="city"
-                value={formData.city}
-                onChange={handleInputChange}
-                placeholder="London"
-              />
-            </FormGroup>
-            <FormGroup>
-              <Label>Postal Code *</Label>
-              <Input
-                name="postalCode"
-                value={formData.postalCode}
-                onChange={handleInputChange}
-                placeholder="SW1A 1AA"
-              />
-            </FormGroup>
-            <FormGroup>
-              <Label>Order Notes (Optional)</Label>
-              <TextArea
-                name="notes"
-                value={formData.notes}
-                onChange={handleInputChange}
-                placeholder="Leave at door, ring bell twice..."
-              />
-            </FormGroup>
-          </Section>
+              <Section>
+                <SectionTitle>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+                    <circle cx="12" cy="7" r="4" />
+                  </svg>
+                  Contact Information
+                </SectionTitle>
+                <FormGroup>
+                  <Label>Full Name *</Label>
+                  <Input
+                    name="fullName"
+                    value={formData.fullName}
+                    onChange={handleInputChange}
+                    placeholder="John Smith"
+                  />
+                </FormGroup>
+                <FormGroup>
+                  <Label>Phone Number *</Label>
+                  <Input
+                    name="phone"
+                    type="tel"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    placeholder="+44 7700 900000"
+                  />
+                </FormGroup>
+                <FormGroup>
+                  <Label>Email (for receipt)</Label>
+                  <Input
+                    name="email"
+                    type="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    placeholder="john@example.com"
+                  />
+                </FormGroup>
+              </Section>
 
-          <Section>
-            <SectionTitle>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <path d="M16 10a4 4 0 0 1-8 0" />
-              </svg>
-              Order Summary
-            </SectionTitle>
-            <OrderSummary>
-              <SummaryRow>
-                <span>
-                  Subtotal ({totalItems} {totalItems === 1 ? 'item' : 'items'})
-                </span>
-                <span>£{totalPrice.toFixed(2)}</span>
-              </SummaryRow>
-              <SummaryRow>
-                <span>Shipping</span>
-                <span
-                  style={{
-                    color: shippingCost === 0 ? '#22c55e' : undefined,
-                    fontWeight: shippingCost === 0 ? 600 : 400,
+              <Section>
+                <SectionTitle>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
+                    <circle cx="12" cy="10" r="3" />
+                  </svg>
+                  Delivery Address
+                </SectionTitle>
+                <FormGroup>
+                  <Label>Street Address *</Label>
+                  <Input
+                    name="address"
+                    value={formData.address}
+                    onChange={handleInputChange}
+                    placeholder="123 Main Street, Apt 4B"
+                  />
+                </FormGroup>
+                <FormGroup>
+                  <Label>City *</Label>
+                  <Input
+                    name="city"
+                    value={formData.city}
+                    onChange={handleInputChange}
+                    placeholder="London"
+                  />
+                </FormGroup>
+                <FormGroup>
+                  <Label>Postal Code *</Label>
+                  <Input
+                    name="postalCode"
+                    value={formData.postalCode}
+                    onChange={handleInputChange}
+                    placeholder="SW1A 1AA"
+                  />
+                </FormGroup>
+                <FormGroup>
+                  <Label>Order Notes (Optional)</Label>
+                  <TextArea
+                    name="notes"
+                    value={formData.notes}
+                    onChange={handleInputChange}
+                    placeholder="Leave at door, ring bell twice..."
+                  />
+                </FormGroup>
+              </Section>
+
+              <Section>
+                <SectionTitle>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z" />
+                    <line x1="3" y1="6" x2="21" y2="6" />
+                    <path d="M16 10a4 4 0 0 1-8 0" />
+                  </svg>
+                  Order Summary
+                </SectionTitle>
+                <OrderSummary>
+                  <SummaryRow>
+                    <span>Subtotal ({totalItems} {totalItems === 1 ? 'item' : 'items'})</span>
+                    <span>£{totalPrice.toFixed(2)}</span>
+                  </SummaryRow>
+                  <SummaryRow>
+                    <span>Shipping</span>
+                    <span style={{ color: shippingCost === 0 ? '#22c55e' : undefined, fontWeight: shippingCost === 0 ? 600 : 400 }}>
+                      {shippingCost === 0 ? 'FREE' : `£${shippingCost.toFixed(2)}`}
+                    </span>
+                  </SummaryRow>
+
+                  {shippingSettings.freeShippingThreshold > 0 && (
+                    <FreeShippingBadge>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
+                      </svg>
+                      {shippingCost === 0
+                        ? 'You unlocked free shipping!'
+                        : `Spend £${remainingForFree.toFixed(2)} more for free shipping`}
+                    </FreeShippingBadge>
+                  )}
+
+                  <SummaryRow total>
+                    <span>Total</span>
+                    <span>£{finalTotal.toFixed(2)}</span>
+                  </SummaryRow>
+                </OrderSummary>
+              </Section>
+
+              <BottomBar>
+                <ContinueButton onClick={handleContinueToPayment} disabled={isSubmitting}>
+                  {isSubmitting ? (
+                    <>Processing...</>
+                  ) : (
+                    <>
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M5 12h14" />
+                        <path d="M12 5l7 7-7 7" />
+                      </svg>
+                      Continue to Payment · £{finalTotal.toFixed(2)}
+                    </>
+                  )}
+                </ContinueButton>
+              </BottomBar>
+            </>
+          )}
+
+          {step === 'payment' && clientSecret && (
+            <>
+              <Section>
+                <SectionTitle>
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <rect x="1" y="4" width="22" height="16" rx="2" ry="2" />
+                    <line x1="1" y1="10" x2="23" y2="10" />
+                  </svg>
+                  Payment Details
+                </SectionTitle>
+                
+                <Elements
+                  stripe={getStripe()}
+                  options={{
+                    clientSecret,
+                    appearance: stripeAppearance,
                   }}
                 >
-                  {shippingCost === 0 ? 'FREE' : `£${shippingCost.toFixed(2)}`}
-                </span>
-              </SummaryRow>
+                  <StripePaymentForm
+                    amount={finalTotal}
+                    onSuccess={handlePaymentSuccess}
+                    onError={handlePaymentError}
+                  />
+                </Elements>
+              </Section>
 
-              {shippingSettings.freeShippingThreshold > 0 && (
-                <FreeShippingBadge>
-                  <svg
-                    width="14"
-                    height="14"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
-                  </svg>
-                  {shippingCost === 0
-                    ? 'You unlocked free shipping!'
-                    : `Spend £${remainingForFree.toFixed(
-                        2
-                      )} more for free shipping`}
-                </FreeShippingBadge>
-              )}
+              <Section>
+                <OrderSummary>
+                  <SummaryRow>
+                    <span>Subtotal</span>
+                    <span>£{totalPrice.toFixed(2)}</span>
+                  </SummaryRow>
+                  <SummaryRow>
+                    <span>Shipping</span>
+                    <span>{shippingCost === 0 ? 'FREE' : `£${shippingCost.toFixed(2)}`}</span>
+                  </SummaryRow>
+                  <SummaryRow total>
+                    <span>Total to Pay</span>
+                    <span>£{finalTotal.toFixed(2)}</span>
+                  </SummaryRow>
+                </OrderSummary>
+              </Section>
+            </>
+          )}
 
-              <SummaryRow total>
-                <span>Total</span>
-                <span>£{finalTotal.toFixed(2)}</span>
-              </SummaryRow>
-            </OrderSummary>
-          </Section>
+          {step === 'payment' && !clientSecret && (
+            <LoadingSpinner>Loading payment form...</LoadingSpinner>
+          )}
         </Container>
-
-        <BottomBar>
-          <PlaceOrderButton onClick={handlePlaceOrder} disabled={isSubmitting}>
-            {isSubmitting ? (
-              <>Processing...</>
-            ) : (
-              <>
-                <svg
-                  width="20"
-                  height="20"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M5 12h14" />
-                  <path d="M12 5l7 7-7 7" />
-                </svg>
-                Place Order · £{finalTotal.toFixed(2)}
-              </>
-            )}
-          </PlaceOrderButton>
-        </BottomBar>
       </TelegramLayout>
     </>
   )

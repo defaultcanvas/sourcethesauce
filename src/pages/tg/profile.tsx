@@ -226,15 +226,26 @@ export default function ProfilePage() {
       if (!user?.id && !telegramUser?.id) return
       
       try {
-        let query = supabase
-          .from('orders')
-          .select('id', { count: 'exact', head: true })
+        // Get actual user_id from telegram_users if needed
+        let userId = user?.id
         
-        if (user?.id) {
-          query = query.eq('user_id', user.id)
+        if (!userId && telegramUser?.id) {
+          const { data: telegramUserData } = await supabase
+            .from('telegram_users')
+            .select('id')
+            .eq('telegram_id', telegramUser.id.toString())
+            .single()
+          
+          userId = telegramUserData?.id
         }
         
-        const { count } = await query
+        if (!userId) return
+        
+        const { count } = await supabase
+          .from('orders')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', userId)
+        
         setOrdersCount(count || 0)
       } catch (error) {
         console.error('Error fetching orders count:', error)

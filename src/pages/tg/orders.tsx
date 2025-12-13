@@ -238,41 +238,37 @@ export default function OrdersPage() {
       }
 
       try {
-        let query = supabase
+        // First, get the user ID from telegram_users table if we only have telegramUser
+        let userId = user?.id
+        
+        if (!userId && telegramUser?.id) {
+          const { data: telegramUserData } = await supabase
+            .from('telegram_users')
+            .select('id')
+            .eq('telegram_id', telegramUser.id.toString())
+            .single()
+          
+          userId = telegramUserData?.id
+        }
+
+        if (!userId) {
+          setIsLoading(false)
+          return
+        }
+
+        const { data, error } = await supabase
           .from('orders')
           .select(`
             id,
             order_number,
             status,
+            payment_status,
             total,
             created_at,
             items:order_items(qty)
           `)
+          .eq('user_id', userId)
           .order('created_at', { ascending: false })
-
-        // Primary: match by authenticated user id
-        if (user?.id) {
-          query = query.eq('user_id', user.id)
-        } else if (telegramUser?.id) {
-          // If the visitor is a Telegram-only user, try to find the corresponding
-          // telegram_users row that we create during checkout and use its id
-          // (orders were created with `user_id` referencing that row).
-          const { data: tu, error: tuErr } = await supabase
-            .from('telegram_users')
-            .select('id')
-            .eq('telegram_id', String(telegramUser.id))
-            .limit(1)
-            .maybeSingle()
-
-          if (tu && (tu as any).id) {
-            query = query.eq('user_id', (tu as any).id)
-          } else {
-            // Fallback: match orders that have a telegram_id column set
-            query = query.eq('telegram_id', String(telegramUser.id))
-          }
-        }
-
-        const { data, error } = await query
 
         if (error) {
           console.error('Error fetching orders:', error)
