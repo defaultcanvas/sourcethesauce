@@ -28,7 +28,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Amount should be in smallest currency unit (pence for GBP)
     const amountInPence = Math.round(amount * 100)
 
-    // Create PaymentIntent with metadata for order tracking
+    // Create PaymentIntent with automatic payment methods
+    // This will show all payment methods enabled in your Stripe Dashboard
+    // including: cards, Klarna, PayPal, Revolut Pay, Link, etc.
     const paymentIntent = await stripe.paymentIntents.create({
       amount: amountInPence,
       currency: currency.toLowerCase(),

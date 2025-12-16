@@ -233,6 +233,7 @@ export default function OrdersPage() {
   useEffect(() => {
     const fetchOrders = async () => {
       if (!user?.id && !telegramUser?.id) {
+        console.log('No user or telegram user found')
         setIsLoading(false)
         return
       }
@@ -242,6 +243,7 @@ export default function OrdersPage() {
         let userId = user?.id
         
         if (!userId && telegramUser?.id) {
+          console.log('Looking up user by telegram_id:', telegramUser.id)
           const { data: telegramUserData } = await supabase
             .from('telegram_users')
             .select('id')
@@ -249,13 +251,16 @@ export default function OrdersPage() {
             .single()
           
           userId = telegramUserData?.id
+          console.log('Found user_id:', userId)
         }
 
         if (!userId) {
+          console.log('No userId found after lookup')
           setIsLoading(false)
           return
         }
 
+        console.log('Fetching orders for user_id:', userId)
         const { data, error } = await supabase
           .from('orders')
           .select(`
@@ -273,6 +278,7 @@ export default function OrdersPage() {
         if (error) {
           console.error('Error fetching orders:', error)
         } else {
+          console.log('Fetched orders:', data)
           setOrders(data || [])
         }
       } catch (error) {

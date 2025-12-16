@@ -102,8 +102,13 @@ export function StripePaymentForm({
     setErrorMessage(null)
 
     try {
+      // Confirm payment with return_url for redirect-based payment methods
+      // (Revolut Pay, PayPal, Klarna, etc.)
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
+        confirmParams: {
+          return_url: `${window.location.origin}/tg/payment-success`,
+        },
         redirect: 'if_required',
       })
 
@@ -112,19 +117,6 @@ export function StripePaymentForm({
         onError(error.message || 'Payment failed')
       } else if (paymentIntent && paymentIntent.status === 'succeeded') {
         onSuccess(paymentIntent.id)
-      } else if (paymentIntent && paymentIntent.status === 'requires_action') {
-        // Handle 3D Secure or other authentication
-        const { error: confirmError } = await stripe.confirmPayment({
-          elements,
-          confirmParams: {
-            return_url: window.location.href,
-          },
-        })
-
-        if (confirmError) {
-          setErrorMessage(confirmError.message || 'Authentication failed')
-          onError(confirmError.message || 'Authentication failed')
-        }
       }
     } catch (err: any) {
       setErrorMessage(err.message || 'An unexpected error occurred')
@@ -155,6 +147,9 @@ export function StripePaymentForm({
           <PaymentElement
             options={{
               layout: 'tabs',
+              business: {
+                name: 'Source The Sauce',
+              },
             }}
           />
         </PaymentElementWrapper>
