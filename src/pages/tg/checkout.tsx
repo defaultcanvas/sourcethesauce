@@ -567,19 +567,24 @@ export default function CheckoutPage() {
 
       if (orderError) throw orderError
 
-      // Create order items
-      const orderItems = items.map(item => ({
-        order_id: order.id,
-        product_id: item.product_id,
-        variant_id: item.variant_id,
-        product_name: item.product?.name || 'Unknown Product',
-        product_image: item.product?.images?.[0]?.url || null,
-        colour: item.variant?.colour || null,
-        size: item.variant?.size || null,
-        qty: item.quantity,
-        price: item.product?.price || 0,
-        total: (item.product?.price || 0) * item.quantity,
-      }))
+      // Create order items - ensure variant_id is valid or null
+      const orderItems = items.map(item => {
+        // Only include variant_id if it's a valid UUID and not undefined
+        const variantId = item.variant_id && item.variant_id !== 'undefined' ? item.variant_id : null
+        
+        return {
+          order_id: order.id,
+          product_id: item.product_id,
+          variant_id: variantId,
+          product_name: item.product?.name || 'Unknown Product',
+          product_image: item.product?.images?.[0]?.url || null,
+          colour: item.variant?.colour || null,
+          size: item.variant?.size || null,
+          qty: item.quantity,
+          price: item.product?.price || 0,
+          total: (item.product?.price || 0) * item.quantity,
+        }
+      })
 
       const { error: itemsError } = await supabase
         .from('order_items')
