@@ -48,17 +48,34 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
       // Update order payment status if order_id is in metadata
       if (paymentIntent.metadata?.order_id) {
-        const { error } = await supabaseAdmin
+        const { data: order, error } = await supabaseAdmin
           .from('orders')
           .update({
             payment_status: 'paid',
             payment_id: paymentIntent.id,
             payment_method: 'stripe',
+            status: 'confirmed',
           })
           .eq('id', paymentIntent.metadata.order_id)
+          .select('order_number, total, shipping_name')
+          .single()
 
         if (error) {
           console.error('Failed to update order payment status:', error)
+        } else if (order) {
+          // Send admin notification
+          await fetch(`${process.env.VERCEL_URL || 'http://localhost:3000'}/api/notifications/order-status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId: paymentIntent.metadata.order_id,
+              orderNumber: order.order_number,
+              status: 'confirmed',
+              paymentStatus: 'paid',
+              amount: order.total,
+              customerName: order.shipping_name,
+            }),
+          }).catch(err => console.error('Failed to send notification:', err))
         }
       }
       break
@@ -70,15 +87,31 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       
       // Update order if exists
       if (paymentIntent.metadata?.order_id) {
-        const { error } = await supabaseAdmin
+        const { data: order, error } = await supabaseAdmin
           .from('orders')
           .update({
             payment_status: 'failed',
           })
           .eq('id', paymentIntent.metadata.order_id)
+          .select('order_number, total, shipping_name')
+          .single()
 
         if (error) {
           console.error('Failed to update order payment status:', error)
+        } else if (order) {
+          // Send admin notification
+          await fetch(`${process.env.VERCEL_URL || 'http://localhost:3000'}/api/notifications/order-status`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              orderId: paymentIntent.metadata.order_id,
+              orderNumber: order.order_number,
+              status: 'payment_failed',
+              paymentStatus: 'failed',
+              amount: order.total,
+              customerName: order.shipping_name,
+            }),
+          }).catch(err => console.error('Failed to send notification:', err))
         }
       }
       break

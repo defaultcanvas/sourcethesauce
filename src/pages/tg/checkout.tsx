@@ -618,7 +618,8 @@ export default function CheckoutPage() {
 
       setOrderId(order.id)
 
-      // Create Stripe payment intent
+      // Create Stripe payment intent with idempotency key to prevent duplicates
+      const idempotencyKey = `order_${order.id}_${Date.now()}`
       const { clientSecret, paymentIntentId } = await createPaymentIntent({
         amount: finalTotal,
         currency: 'gbp',
@@ -627,7 +628,9 @@ export default function CheckoutPage() {
         metadata: {
           order_id: order.id,
           order_number: orderNumber,
+          ...(userId && { user_id: userId }),
         },
+        idempotencyKey,
       })
 
       // Store payment intent ID in order

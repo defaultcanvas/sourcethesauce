@@ -18,6 +18,7 @@ export async function createPaymentIntent(params: {
   customerEmail?: string
   customerName?: string
   metadata?: Record<string, string>
+  idempotencyKey?: string
 }) {
   const response = await fetch('/api/stripe/create-payment-intent', {
     method: 'POST',

@@ -19,6 +19,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       customerEmail,
       customerName,
       metadata = {},
+      idempotencyKey,
     } = req.body
 
     if (!amount || amount <= 0) {
@@ -28,14 +29,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     // Amount should be in smallest currency unit (pence for GBP)
     const amountInPence = Math.round(amount * 100)
 
+    console.log('Creating payment intent:', {
+      amount: amountInPence,
+      currency: currency.toLowerCase(),
+      customerEmail,
+      idempotencyKey,
+    })
+
     // Create PaymentIntent with automatic payment methods
     // This will show all payment methods enabled in your Stripe Dashboard
     // including: cards, Klarna, PayPal, Revolut Pay, Link, etc.
-    const paymentIntent = await stripe.paymentIntents.create({
+    const paymentIntentOptions: Stripe.PaymentIntentCreateParams = {
       amount: amountInPence,
       currency: currency.toLowerCase(),
       automatic_payment_methods: {
         enabled: true,
+        allow_redirects: 'always',
       },
       metadata: {
         ...metadata,
@@ -43,6 +52,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         customerEmail,
       },
       receipt_email: customerEmail || undefined,
+    }
+
+    const requestOptions: Stripe.RequestOptions = {}
+    if (idempotencyKey) {
+      requestOptions.idempotencyKey = idempotencyKey
+    }
+
+    const paymentIntent = await stripe.paymentIntents.create(
+      paymentIntentOptions,
+      requestOptions
+    )
+
+    console.log('Payment intent created:', {
+      id: paymentIntent.id,
+      amount: paymentIntent.amount,
+      currency: paymentIntent.currency,
     })
 
     return res.status(200).json({

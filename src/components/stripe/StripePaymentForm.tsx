@@ -154,6 +154,10 @@ export function StripePaymentForm({
               business: {
                 name: 'Source The Sauce',
               },
+              wallets: {
+                applePay: 'auto',
+                googlePay: 'auto',
+              },
             }}
           />
         </PaymentElementWrapper>
