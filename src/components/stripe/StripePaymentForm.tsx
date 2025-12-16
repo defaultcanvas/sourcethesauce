@@ -78,6 +78,7 @@ interface StripePaymentFormProps {
   onSuccess: (paymentIntentId: string) => void
   onError: (error: string) => void
   disabled?: boolean
+  returnUrl?: string
 }
 
 export function StripePaymentForm({
@@ -85,6 +86,7 @@ export function StripePaymentForm({
   onSuccess,
   onError,
   disabled = false,
+  returnUrl,
 }: StripePaymentFormProps) {
   const stripe = useStripe()
   const elements = useElements()
@@ -104,10 +106,12 @@ export function StripePaymentForm({
     try {
       // Confirm payment with return_url for redirect-based payment methods
       // (Revolut Pay, PayPal, Klarna, etc.)
+      const finalReturnUrl = returnUrl || `${window.location.origin}/tg/payment-success`
+      
       const { error, paymentIntent } = await stripe.confirmPayment({
         elements,
         confirmParams: {
-          return_url: `${window.location.origin}/tg/payment-success`,
+          return_url: finalReturnUrl,
         },
         redirect: 'if_required',
       })

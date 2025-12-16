@@ -945,6 +945,7 @@ export default function CheckoutPage() {
                     amount={finalTotal}
                     onSuccess={handlePaymentSuccess}
                     onError={handlePaymentError}
+                    returnUrl={`${window.location.origin}/tg/orders`}
                   />
                 </Elements>
               </Section>

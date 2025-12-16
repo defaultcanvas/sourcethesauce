@@ -155,12 +155,12 @@ function PaymentSuccessContent() {
           console.log('Cart cleared successfully')
 
           setStatus('success')
-          setMessage('Payment successful! Your order has been confirmed.')
+          setMessage('Payment successful! Redirecting to your orders...')
           
-          // Redirect to orders page after 2 seconds
+          // Redirect to orders page immediately
           setTimeout(() => {
             router.push('/tg/orders')
-          }, 2000)
+          }, 1500)
         } else if (paymentIntent.status === 'processing') {
           setStatus('loading')
           setMessage('Your payment is being processed. Please wait...')
