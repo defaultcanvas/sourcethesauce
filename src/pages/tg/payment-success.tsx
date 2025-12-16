@@ -188,7 +188,7 @@ function PaymentSuccessContent() {
   }
 
   return (
-    <TelegramLayout title="Payment Status">
+    <TelegramLayout showNav={false}>
       <Container>
         <Card>
           <IconWrapper status={status}>
