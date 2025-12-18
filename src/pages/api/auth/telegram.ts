@@ -8,6 +8,12 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
   }
 
   try {
+    // Ensure server-side Supabase admin client is available
+    if (!supabaseAdmin) {
+      console.error('Supabase admin client unavailable. Check SUPABASE_SERVICE_ROLE_KEY and NEXT_PUBLIC_SUPABASE_URL env vars.')
+      return res.status(500).json({ error: 'Server misconfigured: Supabase admin client unavailable' })
+    }
+
     const { initData } = req.body
 
     if (!initData) {
@@ -36,93 +42,65 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     const telegramUser = parsed.user
 
-    // Upsert user in database using the function we created
-    const { data: profile, error: dbError } = await supabaseAdmin.rpc('upsert_telegram_user', {
-      p_telegram_id: telegramUser.id,
-      p_username: telegramUser.username || null,
-      p_first_name: telegramUser.first_name,
-      p_last_name: telegramUser.last_name || null,
-      p_photo_url: telegramUser.photo_url || null,
-      p_language_code: telegramUser.language_code || null,
-      p_is_premium: telegramUser.is_premium || false,
-    })
+    // Check if user exists
+    const { data: existingUser } = await supabaseAdmin
+      .from('telegram_users')
+      .select('*')
+      .eq('telegram_id', String(telegramUser.id))
+      .single()
 
-    if (dbError) {
-      console.error('Database error:', dbError)
-      
-      // Fallback: try direct insert/update if function doesn't exist
-      const { data: existingProfile } = await supabaseAdmin
-        .from('profiles')
-        .select('*')
-        .eq('telegram_id', telegramUser.id)
+    if (existingUser) {
+      // Update existing user
+      const { data: updatedUser, error: updateError } = await supabaseAdmin
+        .from('telegram_users')
+        .update({
+          username: telegramUser.username || null,
+          first_name: telegramUser.first_name,
+          last_name: telegramUser.last_name || null,
+          photo_url: telegramUser.photo_url || null,
+          language_code: telegramUser.language_code || null,
+          is_premium: telegramUser.is_premium || false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('telegram_id', String(telegramUser.id))
+        .select()
         .single()
 
-      if (existingProfile) {
-        // Update existing profile
-        const { data: updatedProfile, error: updateError } = await supabaseAdmin
-          .from('profiles')
-          .update({
-            telegram_username: telegramUser.username,
-            telegram_first_name: telegramUser.first_name,
-            telegram_last_name: telegramUser.last_name,
-            telegram_photo_url: telegramUser.photo_url,
-            telegram_language_code: telegramUser.language_code,
-            telegram_is_premium: telegramUser.is_premium || false,
-            full_name: `${telegramUser.first_name} ${telegramUser.last_name || ''}`.trim(),
-            avatar_url: telegramUser.photo_url,
-            last_seen_at: new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq('telegram_id', telegramUser.id)
-          .select()
-          .single()
-
-        if (updateError) {
-          console.error('Update error:', updateError)
-          return res.status(500).json({ error: 'Failed to update user profile' })
-        }
-
-        return res.status(200).json({ 
-          user: updatedProfile,
-          isNewUser: false,
-        })
-      } else {
-        // Insert new profile
-        const { data: newProfile, error: insertError } = await supabaseAdmin
-          .from('profiles')
-          .insert({
-            telegram_id: telegramUser.id,
-            telegram_username: telegramUser.username,
-            telegram_first_name: telegramUser.first_name,
-            telegram_last_name: telegramUser.last_name,
-            telegram_photo_url: telegramUser.photo_url,
-            telegram_language_code: telegramUser.language_code,
-            telegram_is_premium: telegramUser.is_premium || false,
-            full_name: `${telegramUser.first_name} ${telegramUser.last_name || ''}`.trim(),
-            avatar_url: telegramUser.photo_url,
-            auth_provider: 'telegram',
-            role: 'customer',
-            last_seen_at: new Date().toISOString(),
-          })
-          .select()
-          .single()
-
-        if (insertError) {
-          console.error('Insert error:', insertError)
-          return res.status(500).json({ error: 'Failed to create user profile' })
-        }
-
-        return res.status(201).json({ 
-          user: newProfile,
-          isNewUser: true,
-        })
+      if (updateError) {
+        console.error('Update error:', updateError)
+        return res.status(500).json({ error: 'Failed to update user profile' })
       }
-    }
 
-    return res.status(200).json({ 
-      user: profile,
-      isNewUser: false, // The function handles upsert, we don't know if new
-    })
+      return res.status(200).json({ 
+        user: updatedUser,
+        isNewUser: false,
+      })
+    } else {
+      // Insert new user
+      const { data: newUser, error: insertError } = await supabaseAdmin
+        .from('telegram_users')
+        .insert({
+          telegram_id: String(telegramUser.id),
+          username: telegramUser.username || null,
+          first_name: telegramUser.first_name,
+          last_name: telegramUser.last_name || null,
+          photo_url: telegramUser.photo_url || null,
+          language_code: telegramUser.language_code || null,
+          is_premium: telegramUser.is_premium || false,
+        })
+        .select()
+        .single()
+
+      if (insertError) {
+        console.error('Insert error:', insertError)
+        return res.status(500).json({ error: 'Failed to create user profile' })
+      }
+
+      return res.status(201).json({ 
+        user: newUser,
+        isNewUser: true,
+      })
+    }
 
   } catch (error) {
     console.error('Telegram auth error:', error)

@@ -9,7 +9,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 -- =============================================
 -- 1. CATEGORIES TABLE
 -- =============================================
-CREATE TABLE categories (
+CREATE TABLE IF NOT EXISTS categories (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   slug VARCHAR(100) UNIQUE NOT NULL,
   name VARCHAR(100) NOT NULL,
@@ -25,7 +25,7 @@ CREATE TABLE categories (
 -- =============================================
 -- 2. PRODUCTS TABLE
 -- =============================================
-CREATE TABLE products (
+CREATE TABLE IF NOT EXISTS products (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   sku VARCHAR(50) UNIQUE NOT NULL,
   name VARCHAR(255) NOT NULL,
@@ -51,7 +51,7 @@ CREATE TABLE products (
 -- =============================================
 -- 3. PRODUCT IMAGES TABLE
 -- =============================================
-CREATE TABLE product_images (
+CREATE TABLE IF NOT EXISTS product_images (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   image_url TEXT NOT NULL,
@@ -64,7 +64,7 @@ CREATE TABLE product_images (
 -- =============================================
 -- 4. PRODUCT SIZES TABLE
 -- =============================================
-CREATE TABLE product_sizes (
+CREATE TABLE IF NOT EXISTS product_sizes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   label VARCHAR(20) NOT NULL, -- S, M, L, XL, etc.
@@ -77,7 +77,7 @@ CREATE TABLE product_sizes (
 -- =============================================
 -- 5. PRODUCT COLORS TABLE
 -- =============================================
-CREATE TABLE product_colors (
+CREATE TABLE IF NOT EXISTS product_colors (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   name VARCHAR(50), -- "Red", "Blue", etc.
@@ -91,7 +91,7 @@ CREATE TABLE product_colors (
 -- =============================================
 -- 6. PROMOTIONS TABLE
 -- =============================================
-CREATE TABLE promotions (
+CREATE TABLE IF NOT EXISTS promotions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   discount_percent DECIMAL(5, 2) NOT NULL, -- e.g., 23.00 for 23%
@@ -104,7 +104,7 @@ CREATE TABLE promotions (
 -- =============================================
 -- 7. USER PROFILES TABLE (extends Supabase auth.users)
 -- =============================================
-CREATE TABLE profiles (
+CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   email VARCHAR(255),
   full_name VARCHAR(255),
@@ -118,7 +118,7 @@ CREATE TABLE profiles (
 -- =============================================
 -- 8. ADDRESSES TABLE
 -- =============================================
-CREATE TABLE addresses (
+CREATE TABLE IF NOT EXISTS addresses (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   label VARCHAR(50) DEFAULT 'Home', -- Home, Work, etc.
@@ -138,7 +138,7 @@ CREATE TABLE addresses (
 -- =============================================
 -- 9. CARTS TABLE
 -- =============================================
-CREATE TABLE carts (
+CREATE TABLE IF NOT EXISTS carts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
   session_id VARCHAR(255), -- For guest carts
@@ -150,7 +150,7 @@ CREATE TABLE carts (
 -- =============================================
 -- 10. CART ITEMS TABLE
 -- =============================================
-CREATE TABLE cart_items (
+CREATE TABLE IF NOT EXISTS cart_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   cart_id UUID NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -166,7 +166,7 @@ CREATE TABLE cart_items (
 -- =============================================
 -- 11. ORDERS TABLE
 -- =============================================
-CREATE TABLE orders (
+CREATE TABLE IF NOT EXISTS orders (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   order_number VARCHAR(20) UNIQUE NOT NULL,
   user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
@@ -213,7 +213,7 @@ CREATE TABLE orders (
 -- =============================================
 -- 12. ORDER ITEMS TABLE
 -- =============================================
-CREATE TABLE order_items (
+CREATE TABLE IF NOT EXISTS order_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
   product_id UUID REFERENCES products(id) ON DELETE SET NULL,
@@ -237,7 +237,7 @@ CREATE TABLE order_items (
 -- =============================================
 -- 13. WISHLISTS TABLE
 -- =============================================
-CREATE TABLE wishlists (
+CREATE TABLE IF NOT EXISTS wishlists (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -248,7 +248,7 @@ CREATE TABLE wishlists (
 -- =============================================
 -- 14. REVIEWS TABLE
 -- =============================================
-CREATE TABLE reviews (
+CREATE TABLE IF NOT EXISTS reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
@@ -266,7 +266,7 @@ CREATE TABLE reviews (
 -- =============================================
 -- 15. HOME PAGE CONTENT TABLE (for CMS)
 -- =============================================
-CREATE TABLE home_content (
+CREATE TABLE IF NOT EXISTS home_content (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   section_type VARCHAR(50) NOT NULL, -- 'above_fold', 'season_sale', 'collection_banner'
   title VARCHAR(255),
@@ -285,7 +285,7 @@ CREATE TABLE home_content (
 -- =============================================
 -- 16. FEATURED PRODUCTS TABLE (for homepage sections)
 -- =============================================
-CREATE TABLE featured_products (
+CREATE TABLE IF NOT EXISTS featured_products (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   section_name VARCHAR(100) NOT NULL, -- 'arrivals', 'best_sale', 'top_rate'
   product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
