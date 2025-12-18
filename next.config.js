@@ -9,6 +9,8 @@ const nextConfig = {
     ignoreDuringBuilds: true,
   },
   images: {
+    // Disable Next.js image optimization to avoid Vercel OPTIMIZED_IMAGE_REQUEST_PAYMENT_REQUIRED
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',
